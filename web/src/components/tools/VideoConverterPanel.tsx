@@ -339,11 +339,16 @@ export function VideoConverterPanel() {
           <div className="convert-progress">
             <div
               className="convert-progress-bar"
-              style={{ width: `${Math.max(4, progress.percent)}%` }}
+              style={{
+                width: `${Math.min(100, Math.max(4, Number.isFinite(progress.percent) ? progress.percent : 4))}%`,
+              }}
             />
           </div>
           <span>
-            {progress.percent}% — {progress.message}
+            {Number.isFinite(progress.percent) && progress.percent >= 0
+              ? `${Math.min(100, Math.round(progress.percent))}%`
+              : "…"}{" "}
+            — {progress.message}
           </span>
         </div>
       )}

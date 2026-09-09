@@ -270,18 +270,77 @@ function encodePreset(
   };
 }
 
+function clampPercent(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.min(99, Math.max(0, Math.round(n)));
+}
+
+/**
+ * CDN often omits Content-Length (total=-1). @ffmpeg/util then reports
+ * received/-1 → giant negative % and can throw on length mismatch.
+ */
+async function fetchCoreBlob(
+  url: string,
+  mime: string,
+  onBytes?: (received: number, total: number) => void,
+  signal?: AbortSignal,
+): Promise<string> {
+  const resp = await fetch(url, { signal, mode: "cors", credentials: "omit" });
+  if (!resp.ok) {
+    throw new Error(`Download failed (${resp.status}) ${url}`);
+  }
+
+  const headerLen = Number.parseInt(resp.headers.get("Content-Length") || "", 10);
+  const total = Number.isFinite(headerLen) && headerLen > 0 ? headerLen : -1;
+
+  const reader = resp.body?.getReader();
+  if (!reader) {
+    const buf = await resp.arrayBuffer();
+    onBytes?.(buf.byteLength, buf.byteLength);
+    return URL.createObjectURL(new Blob([buf], { type: mime }));
+  }
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value?.length) {
+      chunks.push(value);
+      received += value.length;
+      onBytes?.(received, total);
+    }
+  }
+
+  const data = new Uint8Array(received);
+  let offset = 0;
+  for (const chunk of chunks) {
+    data.set(chunk, offset);
+    offset += chunk.length;
+  }
+  onBytes?.(received, received > 0 ? received : total);
+  return URL.createObjectURL(new Blob([data], { type: mime }));
+}
+
 async function toBlobFromCdn(
-  toBlobURL: typeof import("@ffmpeg/util").toBlobURL,
   file: "ffmpeg-core.js" | "ffmpeg-core.wasm",
   mime: string,
-  onDownload?: (ratio: number) => void,
+  onDownload?: (ratio: number | null, received: number) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   let lastError: unknown;
   for (const base of CORE_CDNS) {
     try {
-      return await toBlobURL(`${base}/${file}`, mime, true, ({ received, total }) => {
-        if (total && onDownload) onDownload(received / total);
-      });
+      return await fetchCoreBlob(
+        `${base}/${file}`,
+        mime,
+        (received, total) => {
+          if (!onDownload) return;
+          if (total > 0) onDownload(Math.min(1, received / total), received);
+          else onDownload(null, received);
+        },
+        signal,
+      );
     } catch (error) {
       lastError = error;
     }
@@ -289,6 +348,28 @@ async function toBlobFromCdn(
   throw lastError instanceof Error
     ? lastError
     : new Error("Could not download the FFmpeg engine.");
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => {
+      reject(
+        new Error(
+          `${label} timed out after ${Math.round(ms / 1000)}s. Check network, then retry.`,
+        ),
+      );
+    }, ms);
+    promise.then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
 }
 
 export async function getFFmpeg(
@@ -302,41 +383,74 @@ export async function getFFmpeg(
 
   loadPromise = (async () => {
     const { FFmpeg } = await import("@ffmpeg/ffmpeg");
-    const { toBlobURL } = await import("@ffmpeg/util");
     const next = new FFmpeg();
+    const controller = new AbortController();
     onProgress?.({
       phase: "engine",
       percent: 4,
       message: "Loading converter engine (~31MB)…",
     });
-    const coreURL = await toBlobFromCdn(
-      toBlobURL,
-      "ffmpeg-core.js",
-      "text/javascript",
-      (ratio) =>
-        onProgress?.({
-          phase: "engine",
-          percent: Math.round(ratio * 35),
-          message: "Loading converter engine (~31MB)…",
-        }),
+
+    const coreURL = await withTimeout(
+      toBlobFromCdn(
+        "ffmpeg-core.js",
+        "text/javascript",
+        (ratio, received) =>
+          onProgress?.({
+            phase: "engine",
+            percent:
+              ratio != null
+                ? clampPercent(ratio * 30)
+                : clampPercent(4 + Math.min(26, received / (1024 * 1024))),
+            message: "Loading converter engine (~31MB)…",
+          }),
+        controller.signal,
+      ),
+      90_000,
+      "FFmpeg JS download",
     );
-    const wasmURL = await toBlobFromCdn(
-      toBlobURL,
-      "ffmpeg-core.wasm",
-      "application/wasm",
-      (ratio) =>
-        onProgress?.({
-          phase: "engine",
-          percent: 35 + Math.round(ratio * 55),
-          message: "Loading FFmpeg WASM…",
-        }),
+
+    const wasmURL = await withTimeout(
+      toBlobFromCdn(
+        "ffmpeg-core.wasm",
+        "application/wasm",
+        (ratio, received) =>
+          onProgress?.({
+            phase: "engine",
+            percent:
+              ratio != null
+                ? clampPercent(30 + ratio * 55)
+                : clampPercent(30 + Math.min(55, (received / (32 * 1024 * 1024)) * 55)),
+            message: "Loading FFmpeg WASM…",
+          }),
+        controller.signal,
+      ),
+      180_000,
+      "FFmpeg WASM download",
     );
-    await next.load({
-      coreURL,
-      wasmURL,
-      classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
+
+    onProgress?.({
+      phase: "engine",
+      percent: 90,
+      message: "Starting FFmpeg worker…",
     });
+
+    await withTimeout(
+      next.load({
+        coreURL,
+        wasmURL,
+        classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
+      }),
+      60_000,
+      "FFmpeg worker start",
+    );
+
     ffmpeg = next;
+    onProgress?.({
+      phase: "engine",
+      percent: 100,
+      message: "Engine ready",
+    });
     return next;
   })();
 
@@ -586,7 +700,7 @@ export async function convertVideo(
     if (!Number.isFinite(progress)) return;
     options.onProgress?.({
       phase: "convert",
-      percent: Math.min(99, Math.max(1, Math.round(progress * 100))),
+      percent: clampPercent(Math.min(0.99, Math.max(0, progress)) * 100),
       message: `Converting to ${options.fps} FPS · ${target.label} · ${options.quality}…`,
     });
   };
