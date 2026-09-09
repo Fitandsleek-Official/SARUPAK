@@ -1,11 +1,11 @@
 """
-SARUPAK AI Worker — FastAPI stub for local / Hugging Face Spaces.
+SARUPAK AI Worker — FastAPI for Hugging Face Spaces / local.
 
-MVP web app analyzes in-browser. This worker is the future home for:
-  - person / skin / sky / nature segmentation
-  - richer auto-grade recipes
-
-Deploy later as a Hugging Face Space (Docker / Gradio / FastAPI).
+Endpoints:
+  GET  /health
+  GET  /          (Space landing)
+  POST /v1/analyze
+  POST /v1/segment
 """
 
 from __future__ import annotations
@@ -14,17 +14,25 @@ from typing import Any
 
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 
 app = FastAPI(
     title="SARUPAK Worker",
     description="Owned AI photo analysis / segmentation worker",
-    version="0.1.0",
+    version="0.1.1",
 )
+
+ALLOWED_ORIGINS = [
+    "https://sarupak.vercel.app",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -46,6 +54,29 @@ class AnalyzeResponse(BaseModel):
     provider: str = "stub"
 
 
+@app.get("/", response_class=HTMLResponse)
+def root() -> str:
+    return """
+    <!doctype html>
+    <html><head><meta charset="utf-8"><title>SARUPAK Worker</title>
+    <style>
+      body{font-family:system-ui;background:#12110f;color:#f3efe6;
+      max-width:640px;margin:3rem auto;padding:0 1rem;line-height:1.5}
+      a{color:#e8a045} code{background:#1e1c18;padding:.15rem .4rem;border-radius:6px}
+    </style></head>
+    <body>
+      <h1>SARUPAK Worker</h1>
+      <p>API online. Web app: <a href="https://sarupak.vercel.app">sarupak.vercel.app</a></p>
+      <ul>
+        <li><code>GET /health</code></li>
+        <li><code>POST /v1/analyze</code></li>
+        <li><code>POST /v1/segment</code></li>
+        <li><a href="/docs">OpenAPI docs</a></li>
+      </ul>
+    </body></html>
+    """
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "service": "sarupak-worker"}
@@ -54,13 +85,8 @@ def health() -> dict[str, str]:
 @app.post("/v1/analyze", response_model=AnalyzeResponse)
 async def analyze(file: UploadFile = File(...)) -> AnalyzeResponse:
     """
-    Placeholder: accepts an image and returns a recipe-shaped response.
-
-    Next steps (owned / open-source):
-      1. rembg or BiRefNet → subject mask
-      2. SAM 2 / SegFormer → sky, vegetation
-      3. face parsing → skin
-      4. build EditParams JSON for the Next.js renderer
+    Accepts an image; returns recipe-shaped JSON.
+    Stub now — plug rembg / SAM / SegFormer next.
     """
     _ = await file.read()
 
@@ -68,8 +94,8 @@ async def analyze(file: UploadFile = File(...)) -> AnalyzeResponse:
         scene="general",
         confidence=0.4,
         explanation=(
-            "Worker stub — មិនទាន់រត់ segmentation។ "
-            "ភ្ជាប់ open-source models នៅទីនេះ មុន deploy Hugging Face."
+            "Worker hosted — stub analyze។ "
+            "បន្ទាប់: open-source segmentation models នៅទីនេះ។"
         ),
         issues=["worker_stub"],
         region_hints=[
@@ -92,7 +118,7 @@ async def analyze(file: UploadFile = File(...)) -> AnalyzeResponse:
             "tint": 0,
         },
         masks_available=False,
-        provider="stub",
+        provider="huggingface-space",
     )
 
 
@@ -104,6 +130,7 @@ async def segment(file: UploadFile = File(...)) -> dict[str, Any]:
         "masks": {},
         "classes": ["subject", "skin", "sky", "nature", "background"],
         "status": "not_implemented",
+        "provider": "huggingface-space",
     }
 
 

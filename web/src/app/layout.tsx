@@ -17,7 +17,7 @@ const figtree = Figtree({
 export const metadata: Metadata = {
   title: "SARUPAK — AI Creative Studio",
   description:
-    "AI Image Editor, Background Remover, Collage, Generator, Video & Face Swap. Smart regional photo grading.",
+    "AI Image Editor, Background Remover, Collage, Video Converter (24–240 FPS, HD/2K/4K/8K), Generator & Face Swap.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -56,10 +56,10 @@ export const FEATURES: Feature[] = [
   {
     id: "video",
     href: "/video",
-    title: "AI Video Generator",
-    titleKm: "បង្កើតវីដេអូ AI",
-    blurb: "រូប/prompt → clip ខ្លី (pipeline អនាគត)",
-    status: "soon",
+    title: "Video Converter",
+    titleKm: "បម្លែងវីដេអូ",
+    blurb: "TikTok 120Hz · Facebook · compress · HD–8K",
+    status: "live",
     accent: "#c4a0ff",
   },
   {

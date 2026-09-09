@@ -1265,6 +1265,130 @@ a {
   animation-delay: -1.2s;
 }
 
+.tool-page-video {
+  max-width: 1040px;
+}
+
+.video-tabs {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0 0 1.1rem;
+}
+
+.video-tab {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.video-tab:hover,
+.video-tab.is-active {
+  background: var(--accent-dim);
+  border-color: rgba(196, 160, 255, 0.45);
+}
+
+.drop-zone.convert-drop {
+  min-height: 200px;
+  padding: 2rem 1rem;
+}
+
+.drop-zone.convert-drop.has-file {
+  cursor: default;
+  padding: 0;
+}
+
+.drop-zone.is-over {
+  border-color: rgba(196, 160, 255, 0.8);
+  background: rgba(196, 160, 255, 0.08);
+}
+
+.convert-player {
+  width: 100%;
+  max-height: 420px;
+  display: block;
+  background: #0d0c0b;
+}
+
+.convert-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem 0.75rem;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.convert-section h2 {
+  margin: 0 0 0.55rem;
+}
+
+.convert-section .note {
+  margin-top: 0.55rem;
+}
+
+.convert-grid {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+@media (min-width: 720px) {
+  .convert-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.convert-warn {
+  padding: 0.7rem 0.85rem;
+  border-radius: 12px;
+  border: 1px solid rgba(232, 160, 69, 0.28);
+  background: var(--accent-dim);
+  color: var(--text);
+}
+
+.convert-busy {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.convert-progress {
+  flex: 1 1 180px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.convert-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #c4a0ff, var(--accent));
+  transition: width 0.25s ease;
+}
+
+.convert-result {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  overflow: hidden;
+  background: #0d0c0b;
+}
+
+.convert-result figcaption {
+  padding: 0.45rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+}
+
+.btn-primary:disabled,
+.btn-ghost:disabled,
+.video-tab:disabled,
+.preset-chip:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
@@ -1351,5 +1475,14 @@ a {
   .tool-actions .btn-primary,
   .tool-actions .btn-ghost {
     flex: 1 1 auto;
+  }
+
+  .video-tab {
+    flex: 1;
+    width: auto;
+  }
+
+  .convert-grid .preset-chip {
+    width: auto;
   }
 }
