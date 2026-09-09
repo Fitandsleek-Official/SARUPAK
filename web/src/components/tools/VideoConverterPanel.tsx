@@ -118,6 +118,7 @@ export function VideoConverterPanel() {
         fps,
         resolution,
         quality,
+        sourceMeta: meta,
         onProgress: setProgress,
       });
       setResultBytes(blob.size);
@@ -135,7 +136,7 @@ export function VideoConverterPanel() {
     } finally {
       setBusy(false);
     }
-  }, [file, fps, resolution, quality]);
+  }, [file, fps, resolution, quality, meta]);
 
   const download = () => {
     if (!resultUrl) return;
@@ -359,7 +360,9 @@ export function VideoConverterPanel() {
 
       <p className="note">
         High = post quality for TikTok 120Hz / Facebook. Compress = smaller MP4 for
-        upload limits. First run downloads FFmpeg (~31MB).
+        upload limits. First run downloads FFmpeg (~31MB). iPhone HEVC clips are
+        decoded in the browser first. Use the live site or{" "}
+        <code>npm run dev</code> — not Live Server (port 5500).
       </p>
 
       {error && <p className="error-banner">{error}</p>}

@@ -147,6 +147,7 @@ export interface ConvertOptions {
   fps: FrameRate;
   resolution: ResolutionId;
   quality: QualityId;
+  sourceMeta?: VideoMeta | null;
   onProgress?: (progress: ConvertProgress) => void;
   signal?: AbortSignal;
 }
@@ -206,65 +207,66 @@ export function resolutionOf(id: ResolutionId): ResolutionOption {
   return RESOLUTIONS.find((item) => item.id === id) ?? RESOLUTIONS[0];
 }
 
-function scaleFilter(width: number | null, height: number | null): string {
-  if (!width || !height) return "scale=trunc(iw/2)*2:trunc(ih/2)*2";
+function even(n: number): number {
+  return Math.max(2, Math.round(n / 2) * 2);
+}
+
+function scaleFilter(
+  width: number | null,
+  height: number | null,
+  source?: VideoMeta | null,
+): string {
+  if (!width || !height) {
+    if (source?.width && source?.height) {
+      return `scale=${even(source.width)}:${even(source.height)}`;
+    }
+    return "scale=trunc(iw/2)*2:trunc(ih/2)*2";
+  }
+  // Already exact size — avoid expensive pad/scale
+  if (
+    source &&
+    even(source.width) === width &&
+    even(source.height) === height
+  ) {
+    return `scale=${width}:${height}`;
+  }
   return [
-    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos`,
+    `scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=bilinear`,
     `pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2:black`,
   ].join(",");
 }
 
-function megabitCap(
-  resolution: ResolutionId,
+function buildVf(
   fps: FrameRate,
-  quality: QualityId,
-): number {
-  const base: Record<ResolutionId, number> = {
-    original: 12,
-    v720: 5,
-    vhd: 10,
-    hd720: 6,
-    hd: 12,
-    "2k": 18,
-    "4k": 32,
-    "8k": 45,
-  };
-  const q = quality === "high" ? 1.35 : quality === "compress" ? 0.5 : 0.9;
-  const f = fps >= 120 ? 1.55 : fps >= 60 ? 1.2 : 1;
-  return Math.max(3, Math.round(base[resolution] * q * f));
+  resolution: ResolutionId,
+  source?: VideoMeta | null,
+): string {
+  const target = resolutionOf(resolution);
+  const scale = scaleFilter(target.width, target.height, source);
+  // For high FPS, fps filter after scale keeps memory lower
+  return `${scale},fps=${fps}`;
 }
 
 function encodePreset(
   fps: FrameRate,
   resolution: ResolutionId,
   quality: QualityId,
-): { preset: string; crf: string; audio: string; maxrate: string; bufsize: string } {
+): { preset: string; crf: string; audio: string } {
   const heavy = resolution === "8k" || resolution === "4k" || fps >= 120;
-  const mb = megabitCap(resolution, fps, quality);
   if (quality === "high") {
     return {
-      preset: heavy ? "veryfast" : "fast",
-      crf: heavy ? "19" : "18",
-      audio: "192k",
-      maxrate: `${mb}M`,
-      bufsize: `${mb * 2}M`,
+      preset: heavy ? "ultrafast" : "veryfast",
+      crf: heavy ? "20" : "18",
+      audio: "160k",
     };
   }
   if (quality === "compress") {
-    return {
-      preset: "ultrafast",
-      crf: "28",
-      audio: "128k",
-      maxrate: `${mb}M`,
-      bufsize: `${mb * 2}M`,
-    };
+    return { preset: "ultrafast", crf: "28", audio: "96k" };
   }
   return {
     preset: heavy ? "ultrafast" : "veryfast",
     crf: "23",
-    audio: "160k",
-    maxrate: `${mb}M`,
-    bufsize: `${mb * 2}M`,
+    audio: "128k",
   };
 }
 
@@ -361,6 +363,200 @@ async function safeDelete(instance: FFmpegInstance, path: string): Promise<void>
   }
 }
 
+function summarizeLogs(logs: string[]): string {
+  const interesting = logs
+    .filter((line) =>
+      /error|invalid|hevc|h265|hvc1|not open|unknown|fail|memory|abort/i.test(
+        line,
+      ),
+    )
+    .slice(-4);
+  return interesting.join(" · ");
+}
+
+function humanizeFailure(logs: string[], fallback: string): Error {
+  const blob = logs.join("\n").toLowerCase();
+  if (/hevc|h265|hvc1|hev1/.test(blob)) {
+    return new Error(
+      "This iPhone/HEVC video needs a browser decode pass. Retrying…",
+    );
+  }
+  if (/memory|out of memory|oom|aborted/.test(blob)) {
+    return new Error(
+      "Not enough browser memory for this setting. Try TikTok 60, 720p, or Compress.",
+    );
+  }
+  const hint = summarizeLogs(logs);
+  return new Error(hint ? `${fallback} (${hint})` : fallback);
+}
+
+async function runFFmpegExec(
+  instance: FFmpegInstance,
+  args: string[],
+  timeoutMs: number,
+  signal?: AbortSignal,
+): Promise<{ code: number; logs: string[] }> {
+  const logs: string[] = [];
+  const onLog = ({ message }: { message: string }) => {
+    if (message) logs.push(message);
+  };
+  instance.on("log", onLog);
+  try {
+    const code = await instance.exec(args, timeoutMs, { signal });
+    return { code, logs };
+  } finally {
+    instance.off("log", onLog);
+  }
+}
+
+/**
+ * Browser can decode HEVC (iPhone) even when ffmpeg.wasm cannot.
+ * Record a mid-FPS H.264/WebM, then let ffmpeg raise FPS / finalize MP4.
+ */
+async function browserBridgeBlob(
+  file: File,
+  source: VideoMeta | null | undefined,
+  targetW: number,
+  targetH: number,
+  onProgress?: (progress: ConvertProgress) => void,
+): Promise<Blob> {
+  const url = URL.createObjectURL(file);
+  try {
+    const video = document.createElement("video");
+    video.src = url;
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "auto";
+    await new Promise<void>((resolve, reject) => {
+      video.onloadeddata = () => resolve();
+      video.onerror = () =>
+        reject(
+          new Error(
+            "Browser cannot decode this video (try Export as Most Compatible / H.264 on iPhone).",
+          ),
+        );
+    });
+
+    const srcW = video.videoWidth || source?.width || targetW;
+    const srcH = video.videoHeight || source?.height || targetH;
+    const canvas = document.createElement("canvas");
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext("2d", { alpha: false });
+    if (!ctx) throw new Error("Canvas unavailable");
+
+    const stream = canvas.captureStream(30);
+    const mimeCandidates = [
+      "video/webm;codecs=vp9",
+      "video/webm;codecs=vp8",
+      "video/webm",
+      "video/mp4",
+    ];
+    const mime =
+      mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m)) ?? "";
+    if (!mime) {
+      throw new Error(
+        "This browser cannot re-encode video. Try Chrome/Edge, or export H.264 from iPhone.",
+      );
+    }
+
+    const chunks: BlobPart[] = [];
+    const recorder = new MediaRecorder(stream, {
+      mimeType: mime,
+      videoBitsPerSecond: 8_000_000,
+    });
+    recorder.ondataavailable = (e) => {
+      if (e.data.size) chunks.push(e.data);
+    };
+
+    const done = new Promise<Blob>((resolve, reject) => {
+      recorder.onstop = () =>
+        resolve(new Blob(chunks, { type: mime.includes("mp4") ? "video/mp4" : "video/webm" }));
+      recorder.onerror = () => reject(new Error("Browser re-encode failed."));
+    });
+
+    onProgress?.({
+      phase: "convert",
+      percent: 8,
+      message: "iPhone/HEVC detected — decoding in browser…",
+    });
+
+    recorder.start(200);
+    await video.play();
+
+    const duration = Number.isFinite(video.duration) ? video.duration : 0;
+    const fit = Math.min(targetW / srcW, targetH / srcH);
+    const dw = srcW * fit;
+    const dh = srcH * fit;
+    const dx = (targetW - dw) / 2;
+    const dy = (targetH - dh) / 2;
+
+    let finished = false;
+    await new Promise<void>((resolve) => {
+      const finish = () => {
+        if (finished) return;
+        finished = true;
+        resolve();
+      };
+      const tick = () => {
+        if (finished) return;
+        ctx.fillStyle = "#000";
+        ctx.fillRect(0, 0, targetW, targetH);
+        ctx.drawImage(video, dx, dy, dw, dh);
+        if (duration > 0) {
+          onProgress?.({
+            phase: "convert",
+            percent: Math.min(55, Math.round((video.currentTime / duration) * 55)),
+            message: "Re-encoding compatible video…",
+          });
+        }
+        if (video.ended) {
+          finish();
+          return;
+        }
+        requestAnimationFrame(tick);
+      };
+      video.onended = () => finish();
+      requestAnimationFrame(tick);
+    });
+
+    // Draw last frame once more
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, targetW, targetH);
+    ctx.drawImage(video, dx, dy, dw, dh);
+    await new Promise((r) => setTimeout(r, 120));
+
+    if (recorder.state !== "inactive") recorder.stop();
+    video.pause();
+    return await done;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function targetSize(
+  resolution: ResolutionId,
+  source?: VideoMeta | null,
+): { width: number; height: number } {
+  const t = resolutionOf(resolution);
+  if (t.width && t.height) return { width: t.width, height: t.height };
+  return {
+    width: even(source?.width || 1080),
+    height: even(source?.height || 1920),
+  };
+}
+
+/** iPhone Photos often export HEVC as UUID.MP4 — ffmpeg.wasm usually cannot decode it. */
+function likelyIphoneHevc(file: File): boolean {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".mov") || name.endsWith(".hevc") || name.endsWith(".h265")) {
+    return true;
+  }
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.mp4$/i.test(
+    file.name,
+  );
+}
+
 export async function convertVideo(
   file: File,
   options: ConvertOptions,
@@ -372,7 +568,8 @@ export async function convertVideo(
   }
 
   const target = resolutionOf(options.resolution);
-  const { preset, crf, audio, maxrate, bufsize } = encodePreset(
+  const size = targetSize(options.resolution, options.sourceMeta);
+  const { preset, crf, audio } = encodePreset(
     options.fps,
     options.resolution,
     options.quality,
@@ -380,15 +577,10 @@ export async function convertVideo(
   const instance = await getFFmpeg(options.onProgress);
   const { fetchFile } = await import("@ffmpeg/util");
 
-  const inputName = `input.${extensionOf(file)}`;
-  const outputName = "output.mp4";
-  const vf = `fps=${options.fps},${scaleFilter(target.width, target.height)}`;
-
-  options.onProgress?.({
-    phase: "convert",
-    percent: 0,
-    message: "Writing video into the converter…",
-  });
+  const timeoutMs =
+    options.fps >= 120 || options.resolution === "4k" || options.resolution === "8k"
+      ? 15 * 60 * 1000
+      : 10 * 60 * 1000;
 
   const onFpsProgress = ({ progress }: { progress: number }) => {
     if (!Number.isFinite(progress)) return;
@@ -399,70 +591,207 @@ export async function convertVideo(
     });
   };
 
+  const encodeFromNamedInput = async (
+    inputName: string,
+    meta: VideoMeta | null | undefined,
+  ): Promise<Blob> => {
+    const outputName = "output.mp4";
+    const vf = buildVf(options.fps, options.resolution, meta);
+    await safeDelete(instance, outputName);
+
+    const attempts: string[][] = [
+      [
+        "-i",
+        inputName,
+        "-vf",
+        vf,
+        "-r",
+        String(options.fps),
+        "-c:v",
+        "libx264",
+        "-preset",
+        preset,
+        "-crf",
+        crf,
+        "-pix_fmt",
+        "yuv420p",
+        "-movflags",
+        "+faststart",
+        "-c:a",
+        "aac",
+        "-b:a",
+        audio,
+        "-ar",
+        "44100",
+        "-ac",
+        "2",
+        outputName,
+      ],
+      [
+        "-i",
+        inputName,
+        "-vf",
+        vf,
+        "-r",
+        String(options.fps),
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "23",
+        "-pix_fmt",
+        "yuv420p",
+        "-an",
+        "-movflags",
+        "+faststart",
+        outputName,
+      ],
+      [
+        "-i",
+        inputName,
+        "-vf",
+        scaleFilter(size.width, size.height, meta),
+        "-r",
+        String(options.fps),
+        "-vsync",
+        "cfr",
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "22",
+        "-pix_fmt",
+        "yuv420p",
+        "-an",
+        "-movflags",
+        "+faststart",
+        outputName,
+      ],
+    ];
+
+    let lastLogs: string[] = [];
+    for (const args of attempts) {
+      await safeDelete(instance, outputName);
+      const { code, logs } = await runFFmpegExec(
+        instance,
+        args,
+        timeoutMs,
+        options.signal,
+      );
+      lastLogs = logs;
+      if (code === 0) {
+        const data = await instance.readFile(outputName);
+        if (typeof data === "string") continue;
+        const copy = new Uint8Array(data);
+        await safeDelete(instance, outputName);
+        return new Blob([copy], { type: "video/mp4" });
+      }
+    }
+    throw humanizeFailure(
+      lastLogs,
+      "Conversion failed. Try TikTok 60, 720p, or Compress.",
+    );
+  };
+
   instance.on("progress", onFpsProgress);
 
-  await safeDelete(instance, inputName);
-  await safeDelete(instance, outputName);
-  await instance.writeFile(inputName, await fetchFile(file));
-
-  const timeoutMs = options.resolution === "8k" ? 20 * 60 * 1000 : 12 * 60 * 1000;
-  const common = [
-    "-i",
-    inputName,
-    "-vf",
-    vf,
-    "-r",
-    String(options.fps),
-    "-c:v",
-    "libx264",
-    "-profile:v",
-    "high",
-    "-preset",
-    preset,
-    "-crf",
-    crf,
-    "-maxrate",
-    maxrate,
-    "-bufsize",
-    bufsize,
-    "-pix_fmt",
-    "yuv420p",
-    "-movflags",
-    "+faststart",
-  ];
-
   try {
-    let code = await instance.exec(
-      [...common, "-c:a", "aac", "-b:a", audio, "-ar", "48000", "-ac", "2", outputName],
-      timeoutMs,
-      { signal: options.signal },
-    );
-    if (code !== 0) {
-      await safeDelete(instance, outputName);
-      code = await instance.exec(
-        [...common, "-an", outputName],
-        timeoutMs,
-        { signal: options.signal },
-      );
-    }
-    if (code !== 0) {
-      throw new Error("Conversion failed. Try a lower resolution or frame rate.");
-    }
-
-    const data = await instance.readFile(outputName);
-    if (typeof data === "string") {
-      throw new Error("FFmpeg returned unexpected text output");
-    }
-    const copy = new Uint8Array(data);
     options.onProgress?.({
       phase: "convert",
-      percent: 100,
-      message: "Done",
+      percent: 0,
+      message: "Writing video into the converter…",
     });
-    return new Blob([copy], { type: "video/mp4" });
+
+    const inputName = `input.${extensionOf(file)}`;
+    await safeDelete(instance, inputName);
+
+    const runBridgeThenEncode = async (reason: string): Promise<Blob> => {
+      options.onProgress?.({
+        phase: "convert",
+        percent: 5,
+        message: reason,
+      });
+      const bridge = await browserBridgeBlob(
+        file,
+        options.sourceMeta,
+        size.width,
+        size.height,
+        options.onProgress,
+      );
+      const bridgeName = bridge.type.includes("mp4") ? "bridge.mp4" : "bridge.webm";
+      await safeDelete(instance, bridgeName);
+      await instance.writeFile(bridgeName, await fetchFile(bridge));
+      const bridgedMeta: VideoMeta = {
+        width: size.width,
+        height: size.height,
+        duration: options.sourceMeta?.duration ?? 0,
+      };
+      try {
+        return await encodeFromNamedInput(bridgeName, bridgedMeta);
+      } finally {
+        await safeDelete(instance, bridgeName);
+      }
+    };
+
+    if (likelyIphoneHevc(file)) {
+      try {
+        const blob = await runBridgeThenEncode(
+          "iPhone-style clip — decoding in browser first…",
+        );
+        options.onProgress?.({
+          phase: "convert",
+          percent: 100,
+          message: "Done",
+        });
+        return blob;
+      } catch (bridgeError) {
+        // Fall through to direct ffmpeg in case it was actually H.264
+        options.onProgress?.({
+          phase: "convert",
+          percent: 8,
+          message:
+            bridgeError instanceof Error
+              ? `${bridgeError.message} Trying FFmpeg…`
+              : "Trying FFmpeg…",
+        });
+      }
+    }
+
+    await instance.writeFile(inputName, await fetchFile(file));
+
+    try {
+      const blob = await encodeFromNamedInput(inputName, options.sourceMeta);
+      options.onProgress?.({
+        phase: "convert",
+        percent: 100,
+        message: "Done",
+      });
+      return blob;
+    } catch (directError) {
+      await safeDelete(instance, inputName);
+      try {
+        const blob = await runBridgeThenEncode(
+          directError instanceof Error
+            ? `${directError.message} Using browser decode…`
+            : "Retrying with browser decode…",
+        );
+        options.onProgress?.({
+          phase: "convert",
+          percent: 100,
+          message: "Done",
+        });
+        return blob;
+      } catch (bridgeError) {
+        throw bridgeError instanceof Error
+          ? bridgeError
+          : directError;
+      }
+    } finally {
+      await safeDelete(instance, inputName);
+    }
   } finally {
     instance.off("progress", onFpsProgress);
-    await safeDelete(instance, inputName);
-    await safeDelete(instance, outputName);
   }
 }
