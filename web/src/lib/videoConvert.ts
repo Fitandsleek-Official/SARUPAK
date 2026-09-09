@@ -126,9 +126,10 @@ export const MAX_UPLOAD_BYTES = 250 * 1024 * 1024;
 export const WARN_UPLOAD_BYTES = 80 * 1024 * 1024;
 
 const CORE_VERSION = "0.12.10";
+// Module workers (ffmpeg 0.12) need the ESM core build — UMD hangs on import.
 const CORE_CDNS = [
-  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
-  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/umd`,
+  `https://cdn.jsdelivr.net/npm/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
+  `https://unpkg.com/@ffmpeg/core@${CORE_VERSION}/dist/esm`,
 ];
 
 export interface VideoMeta {
@@ -350,12 +351,22 @@ async function toBlobFromCdn(
     : new Error("Could not download the FFmpeg engine.");
 }
 
-function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  ms: number,
+  label: string,
+  onTimeout?: () => void,
+): Promise<T> {
   return new Promise<T>((resolve, reject) => {
     const timer = window.setTimeout(() => {
+      try {
+        onTimeout?.();
+      } catch {
+        /* ignore */
+      }
       reject(
         new Error(
-          `${label} timed out after ${Math.round(ms / 1000)}s. Check network, then retry.`,
+          `${label} timed out after ${Math.round(ms / 1000)}s. Hard-refresh and retry.`,
         ),
       );
     }, ms);
@@ -385,73 +396,99 @@ export async function getFFmpeg(
     const { FFmpeg } = await import("@ffmpeg/ffmpeg");
     const next = new FFmpeg();
     const controller = new AbortController();
-    onProgress?.({
-      phase: "engine",
-      percent: 4,
-      message: "Loading converter engine (~31MB)…",
-    });
 
-    const coreURL = await withTimeout(
-      toBlobFromCdn(
-        "ffmpeg-core.js",
-        "text/javascript",
-        (ratio, received) =>
-          onProgress?.({
-            phase: "engine",
-            percent:
-              ratio != null
-                ? clampPercent(ratio * 30)
-                : clampPercent(4 + Math.min(26, received / (1024 * 1024))),
-            message: "Loading converter engine (~31MB)…",
-          }),
-        controller.signal,
-      ),
-      90_000,
-      "FFmpeg JS download",
-    );
+    try {
+      onProgress?.({
+        phase: "engine",
+        percent: 4,
+        message: "Loading converter engine (~31MB)…",
+      });
 
-    const wasmURL = await withTimeout(
-      toBlobFromCdn(
-        "ffmpeg-core.wasm",
-        "application/wasm",
-        (ratio, received) =>
-          onProgress?.({
-            phase: "engine",
-            percent:
-              ratio != null
-                ? clampPercent(30 + ratio * 55)
-                : clampPercent(30 + Math.min(55, (received / (32 * 1024 * 1024)) * 55)),
-            message: "Loading FFmpeg WASM…",
-          }),
-        controller.signal,
-      ),
-      180_000,
-      "FFmpeg WASM download",
-    );
+      const coreURL = await withTimeout(
+        toBlobFromCdn(
+          "ffmpeg-core.js",
+          "text/javascript",
+          (ratio, received) =>
+            onProgress?.({
+              phase: "engine",
+              percent:
+                ratio != null
+                  ? clampPercent(ratio * 30)
+                  : clampPercent(4 + Math.min(26, received / (1024 * 1024))),
+              message: "Loading converter engine (~31MB)…",
+            }),
+          controller.signal,
+        ),
+        90_000,
+        "FFmpeg JS download",
+        () => controller.abort(),
+      );
 
-    onProgress?.({
-      phase: "engine",
-      percent: 90,
-      message: "Starting FFmpeg worker…",
-    });
+      const wasmURL = await withTimeout(
+        toBlobFromCdn(
+          "ffmpeg-core.wasm",
+          "application/wasm",
+          (ratio, received) =>
+            onProgress?.({
+              phase: "engine",
+              percent:
+                ratio != null
+                  ? clampPercent(30 + ratio * 55)
+                  : clampPercent(
+                      30 + Math.min(55, (received / (32 * 1024 * 1024)) * 55),
+                    ),
+              message: "Loading FFmpeg WASM…",
+            }),
+          controller.signal,
+        ),
+        180_000,
+        "FFmpeg WASM download",
+        () => controller.abort(),
+      );
 
-    await withTimeout(
-      next.load({
-        coreURL,
-        wasmURL,
-        classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
-      }),
-      60_000,
-      "FFmpeg worker start",
-    );
+      onProgress?.({
+        phase: "engine",
+        percent: 90,
+        message: "Starting FFmpeg worker…",
+      });
 
-    ffmpeg = next;
-    onProgress?.({
-      phase: "engine",
-      percent: 100,
-      message: "Engine ready",
-    });
-    return next;
+      const loadAbort = new AbortController();
+      await withTimeout(
+        next.load(
+          {
+            coreURL,
+            wasmURL,
+            classWorkerURL: `${window.location.origin}/ffmpeg/worker.js`,
+          },
+          { signal: loadAbort.signal },
+        ),
+        90_000,
+        "FFmpeg worker start",
+        () => {
+          loadAbort.abort();
+          try {
+            next.terminate();
+          } catch {
+            /* ignore */
+          }
+        },
+      );
+
+      ffmpeg = next;
+      onProgress?.({
+        phase: "engine",
+        percent: 100,
+        message: "Engine ready",
+      });
+      return next;
+    } catch (error) {
+      try {
+        next.terminate();
+      } catch {
+        /* ignore */
+      }
+      throw error;
+    }
   })();
 
   try {

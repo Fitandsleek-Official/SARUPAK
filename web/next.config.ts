@@ -7,14 +7,21 @@ const nextConfig: NextConfig = {
     "@ffmpeg/ffmpeg",
     "@ffmpeg/util",
   ],
-  // Helps ffmpeg.wasm (SharedArrayBuffer) on modern browsers
   async headers() {
     return [
+      // Single-thread @ffmpeg/core does not need COOP/COEP. Site-wide
+      // credentialless COEP can stall the module worker on some browsers.
       {
-        source: "/:path*",
+        source: "/ffmpeg/:path*",
         headers: [
-          { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
-          { key: "Cross-Origin-Embedder-Policy", value: "credentialless" },
+          {
+            key: "Cross-Origin-Resource-Policy",
+            value: "cross-origin",
+          },
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
         ],
       },
     ];
