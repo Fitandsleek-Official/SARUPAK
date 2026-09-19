@@ -138,11 +138,12 @@ export function StudioDashboard() {
     <main className="studio-shell">
       <header className="studio-header">
         <div>
-          <p className="studio-kicker">AI Video Studio · Phase 5.2</p>
+          <p className="studio-kicker">AI Video Studio · Phase 6</p>
           <h1>SARUPAK Studio</h1>
           <p className="studio-lead">
-            Projects, auth, media, timeline, subtitles, and dubbing. Requires a
-            running <code>sarupak-api</code> (local :4003 or a deployed API URL).
+            CapCut-style editor shell with media, timeline, subtitles, and
+            dubbing. Requires a running <code>sarupak-api</code> (local :4003 or
+            a deployed API URL).
           </p>
           <p className="studio-lead" style={{ marginTop: "0.35rem", fontSize: "0.85rem" }}>
             API: <code>{getApiBaseUrl()}</code>

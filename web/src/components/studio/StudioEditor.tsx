@@ -6,6 +6,7 @@ import {
   api,
   getApiBaseUrl,
   getStoredToken,
+  setStoredToken,
   type Job,
   type MediaAsset,
   type Project,
@@ -18,6 +19,12 @@ import { PreviewPlayer } from "./PreviewPlayer";
 import { SubtitlePanel } from "./SubtitlePanel";
 import { DubbingPanel } from "./DubbingPanel";
 import { TimelinePanel } from "./TimelinePanel";
+import { StudioTopBar, type SaveStatus } from "./StudioTopBar";
+import { StudioToolRail } from "./StudioToolRail";
+import { StudioInspector } from "./StudioInspector";
+import { PlaceholderToolPanel } from "./PlaceholderToolPanel";
+import { TextToolPanel } from "./TextToolPanel";
+import type { StudioToolId } from "./studioTools";
 
 export function StudioEditor({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project | null>(null);
@@ -29,18 +36,32 @@ export function StudioEditor({ projectId }: { projectId: string }) {
   );
   const [exportJob, setExportJob] = useState<Job | null>(null);
   const [aspect, setAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
+  const [activeTool, setActiveTool] = useState<StudioToolId>("media");
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 1100px)");
+    const apply = () => setInspectorOpen(!mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
+  }, []);
 
   const timeline = useEditorStore((s) => s.timeline);
   const dirty = useEditorStore((s) => s.dirty);
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
+  const isPlaying = useEditorStore((s) => s.isPlaying);
+  const canUndo = useEditorStore((s) => s.canUndo);
+  const canRedo = useEditorStore((s) => s.canRedo);
   const init = useEditorStore((s) => s.init);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const splitAtPlayhead = useEditorStore((s) => s.splitAtPlayhead);
-  const setVolume = useEditorStore((s) => s.setVolume);
-  const zoomBy = useEditorStore((s) => s.zoomBy);
   const markSaved = useEditorStore((s) => s.markSaved);
+  const setPlaying = useEditorStore((s) => s.setPlaying);
   const selected = findSelectedClip(timeline, selectedClipId);
 
   const load = useCallback(async () => {
@@ -49,6 +70,8 @@ export function StudioEditor({ projectId }: { projectId: string }) {
       return;
     }
     try {
+      const me = await api.me();
+      setUserEmail(me.email);
       const p = await api.getProject(projectId);
       setProject(p);
       const tl = p.timeline as TimelineDocumentV1;
@@ -145,7 +168,6 @@ export function StudioEditor({ projectId }: { projectId: string }) {
     if (!timeline) return;
     setError(null);
     try {
-      // Ensure latest timeline is persisted before render
       await api.updateProject(projectId, {
         timeline,
         durationMs: computeTimelineDurationMs(timeline),
@@ -192,6 +214,22 @@ export function StudioEditor({ projectId }: { projectId: string }) {
     URL.revokeObjectURL(a.href);
   }
 
+  function onSignOut() {
+    setStoredToken(null);
+    window.location.href = "/studio";
+  }
+
+  const topSaveStatus: SaveStatus =
+    saveState === "saving"
+      ? "saving"
+      : saveState === "error"
+        ? "error"
+        : dirty
+          ? "unsaved"
+          : saveState === "saved"
+            ? "saved"
+            : "idle";
+
   if (error && !project) {
     return (
       <main className="studio-shell">
@@ -205,67 +243,36 @@ export function StudioEditor({ projectId }: { projectId: string }) {
 
   if (!project || !timeline) {
     return (
-      <main className="studio-shell">
+      <main className="studio-shell-app studio-shell-loading">
         <p>Loading editor…</p>
       </main>
     );
   }
 
+  const exportDisabled = media.length === 0 && timeline.tracks.every((t) => t.clips.length === 0);
+
   return (
-    <div className="editor-app">
-      <header className="editor-toolbar">
-        <div className="editor-toolbar-left">
-          <Link href="/studio" className="studio-back">
-            ← Projects
-          </Link>
-          <h1>{project.name}</h1>
-          <span className="editor-save" aria-live="polite">
-            {saveState === "saving"
-              ? "Saving…"
-              : saveState === "saved"
-                ? "Saved"
-                : saveState === "error"
-                  ? "Save failed"
-                  : dirty
-                    ? "Unsaved"
-                    : "Ready"}
-          </span>
-        </div>
-        <div className="editor-toolbar-actions">
-          <button type="button" onClick={() => undo()}>
-            Undo
-          </button>
-          <button type="button" onClick={() => redo()}>
-            Redo
-          </button>
-          <button type="button" onClick={() => splitAtPlayhead()}>
-            Split
-          </button>
-          <button type="button" onClick={() => deleteSelected()}>
-            Delete
-          </button>
-          <button type="button" onClick={() => zoomBy(0.25)}>
-            Zoom +
-          </button>
-          <button type="button" onClick={() => zoomBy(-0.25)}>
-            Zoom −
-          </button>
-          <select
-            value={aspect}
-            onChange={(e) =>
-              setAspect(e.target.value as "16:9" | "9:16" | "1:1")
-            }
-            aria-label="Export aspect ratio"
-          >
-            <option value="16:9">Export 16:9</option>
-            <option value="9:16">Export 9:16</option>
-            <option value="1:1">Export 1:1</option>
-          </select>
-          <button type="button" className="editor-export" onClick={() => void onExport()}>
-            Export MP4
-          </button>
-        </div>
-      </header>
+    <div className="studio-shell-app">
+      <StudioTopBar
+        projectName={project.name}
+        saveStatus={topSaveStatus}
+        canUndo={canUndo}
+        canRedo={canRedo}
+        isPlaying={isPlaying}
+        onUndo={() => undo()}
+        onRedo={() => redo()}
+        onTogglePlay={() => setPlaying(!isPlaying)}
+        onExport={() => void onExport()}
+        exportDisabled={exportDisabled}
+        aspect={aspect}
+        onAspectChange={setAspect}
+        onSplit={() => splitAtPlayhead()}
+        onDelete={() => deleteSelected()}
+        canSplit={Boolean(selected)}
+        canDelete={Boolean(selected)}
+        userEmail={userEmail}
+        onSignOut={onSignOut}
+      />
 
       {error ? (
         <p className="studio-error editor-banner" role="alert">
@@ -288,49 +295,91 @@ export function StudioEditor({ projectId }: { projectId: string }) {
         </p>
       ) : null}
 
-      <div className="editor-body">
-        <MediaLibraryPanel media={media} onUpload={onUpload} busy={busy} />
-        <div className="editor-center">
-          <PreviewPlayer
-            projectId={projectId}
-            width={project.width}
-            height={project.height}
-            media={media}
+      <div className="studio-shell-body">
+        <StudioToolRail
+          active={activeTool}
+          onChange={setActiveTool}
+          orientation="vertical"
+        />
+
+        <div className="studio-shell-workspace">
+          <div
+            className="studio-shell-tool-panel"
+            id={`studio-tool-panel-${activeTool}`}
+            role="tabpanel"
+            aria-labelledby={`studio-tool-${activeTool}`}
+          >
+            {activeTool === "media" ? (
+              <MediaLibraryPanel
+                media={media}
+                onUpload={onUpload}
+                busy={busy}
+                kinds={["VIDEO", "IMAGE"]}
+                title="Media"
+              />
+            ) : null}
+            {activeTool === "audio" ? (
+              <MediaLibraryPanel
+                media={media}
+                onUpload={onUpload}
+                busy={busy}
+                kinds={["AUDIO"]}
+                title="Audio"
+              />
+            ) : null}
+            {activeTool === "text" ? <TextToolPanel /> : null}
+            {activeTool === "captions" ? (
+              <SubtitlePanel projectId={projectId} media={media} />
+            ) : null}
+            {activeTool === "effects" ? (
+              <PlaceholderToolPanel
+                title="Effects"
+                description="Visual effects will appear here in a later phase."
+              />
+            ) : null}
+            {activeTool === "transitions" ? (
+              <PlaceholderToolPanel
+                title="Transitions"
+                description="Clip transitions will appear here in a later phase."
+              />
+            ) : null}
+            {activeTool === "dubbing" ? (
+              <DubbingPanel projectId={projectId} media={media} />
+            ) : null}
+          </div>
+
+          <div className="studio-shell-canvas">
+            <div className="studio-shell-canvas-bar">
+              <button
+                type="button"
+                className="studio-inspector-toggle"
+                onClick={() => setInspectorOpen((v) => !v)}
+                aria-expanded={inspectorOpen}
+                aria-controls="studio-inspector"
+              >
+                {inspectorOpen ? "Hide inspector" : "Show inspector"}
+              </button>
+            </div>
+            <PreviewPlayer
+              projectId={projectId}
+              width={project.width}
+              height={project.height}
+              media={media}
+            />
+          </div>
+
+          <StudioInspector
+            open={inspectorOpen}
+            onClose={() => setInspectorOpen(false)}
           />
-          <aside className="editor-inspector">
-            <h2>Inspector</h2>
-            {selected ? (
-              <>
-                <p>{selected.label ?? selected.id}</p>
-                <label>
-                  Volume
-                  <input
-                    type="range"
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    value={selected.volume}
-                    onChange={(e) => setVolume(Number(e.target.value))}
-                  />
-                </label>
-                <p className="studio-empty">
-                  Start {(selected.startMs / 1000).toFixed(2)}s · Dur{" "}
-                  {(selected.durationMs / 1000).toFixed(2)}s · Trim{" "}
-                  {(selected.trimInMs / 1000).toFixed(2)}–
-                  {(selected.trimOutMs / 1000).toFixed(2)}s
-                </p>
-                <p className="studio-empty">
-                  Shortcuts: Space play · S split · Del delete · ⌘Z undo
-                </p>
-              </>
-            ) : (
-              <p className="studio-empty">Select a clip on the timeline.</p>
-            )}
-          </aside>
-          <SubtitlePanel projectId={projectId} media={media} />
-          <DubbingPanel projectId={projectId} media={media} />
         </div>
       </div>
+
+      <StudioToolRail
+        active={activeTool}
+        onChange={setActiveTool}
+        orientation="horizontal"
+      />
 
       <TimelinePanel />
     </div>

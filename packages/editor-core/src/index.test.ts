@@ -8,6 +8,7 @@ import {
   deleteClip,
   mediaTimeAtPlayhead,
   moveClip,
+  setClipText,
   splitClip,
   trimClip,
 } from "./index";
@@ -154,6 +155,25 @@ describe("timeline ops", () => {
     assert.equal(findStart(history.state, "c2"), 3500);
     history.undo();
     assert.equal(findStart(history.state, "c2"), 2500);
+  });
+
+  it("sets clip text and label", () => {
+    let doc = createEmptyTimeline();
+    const captions = doc.tracks.find((t) => t.kind === "captions")!;
+    doc = addClip(doc, captions.id, {
+      id: "t1",
+      startMs: 0,
+      durationMs: 2000,
+      trimInMs: 0,
+      trimOutMs: 2000,
+      volume: 1,
+      text: "Hello",
+      label: "Hello",
+    });
+    doc = setClipText(doc, "t1", "Updated caption");
+    const updated = doc.tracks.find((t) => t.kind === "captions")!.clips[0]!;
+    assert.equal(updated.text, "Updated caption");
+    assert.equal(updated.label, "Updated caption");
   });
 });
 

@@ -237,6 +237,21 @@ export function setClipVolume(
   return next;
 }
 
+export function setClipText(
+  doc: TimelineDocumentV1,
+  clipId: string,
+  text: string,
+): TimelineDocumentV1 {
+  const next = cloneTimeline(doc);
+  const found = findClip(next, clipId);
+  if (!found) {
+    throw new Error(`Clip not found: ${clipId}`);
+  }
+  found.clip.text = text;
+  found.clip.label = text.slice(0, 48) || found.clip.label;
+  return next;
+}
+
 export function setTrackMuted(
   doc: TimelineDocumentV1,
   trackId: string,

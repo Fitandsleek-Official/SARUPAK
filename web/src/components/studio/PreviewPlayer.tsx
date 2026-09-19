@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { MediaAsset } from "@/lib/api";
 import { getApiBaseUrl, getStoredToken } from "@/lib/api";
 import {
@@ -33,18 +33,25 @@ export function PreviewPlayer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const raf = useRef<number | null>(null);
-
-  const mediaById = useMemo(() => {
-    const map = new Map<string, MediaAsset>();
-    for (const m of media) map.set(m.id, m);
-    return map;
-  }, [media]);
+  const [fitMode, setFitMode] = useState<"contain" | "cover">("contain");
+  const [mediaStatus, setMediaStatus] = useState<"idle" | "loading" | "ready" | "error">(
+    "idle",
+  );
 
   const active = timeline
     ? activeClipsAt(timeline, timeline.playheadMs, ["video", "audio"])
     : [];
   const videoClip = active.find((a) => a.track.kind === "video")?.clip;
   const audioClip = active.find((a) => a.track.kind === "audio")?.clip;
+  const hasAnyMedia = media.length > 0;
+
+  useEffect(() => {
+    if (!videoClip?.mediaAssetId) {
+      setMediaStatus(hasAnyMedia ? "idle" : "idle");
+      return;
+    }
+    setMediaStatus("loading");
+  }, [videoClip?.mediaAssetId, hasAnyMedia]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -106,6 +113,7 @@ export function PreviewPlayer({
       <div
         className="editor-preview-stage"
         style={{ aspectRatio: `${aspect}` }}
+        data-fit={fitMode}
       >
         {videoClip?.mediaAssetId ? (
           <video
@@ -114,9 +122,17 @@ export function PreviewPlayer({
             src={mediaUrl(projectId, videoClip.mediaAssetId)}
             playsInline
             muted={false}
+            style={{ objectFit: fitMode }}
+            onLoadStart={() => setMediaStatus("loading")}
+            onCanPlay={() => setMediaStatus("ready")}
+            onError={() => setMediaStatus("error")}
           />
         ) : (
-          <div className="editor-preview-empty">No video at playhead</div>
+          <div className="editor-preview-empty">
+            {!hasAnyMedia
+              ? "Import media and add it to the timeline to preview."
+              : "No video at playhead"}
+          </div>
         )}
         {audioClip?.mediaAssetId ? (
           <audio
@@ -125,6 +141,16 @@ export function PreviewPlayer({
             src={mediaUrl(projectId, audioClip.mediaAssetId)}
             preload="auto"
           />
+        ) : null}
+        {videoClip?.mediaAssetId && mediaStatus === "loading" ? (
+          <div className="editor-preview-status" role="status">
+            Loading…
+          </div>
+        ) : null}
+        {videoClip?.mediaAssetId && mediaStatus === "error" ? (
+          <div className="editor-preview-status is-error" role="alert">
+            Media failed to load
+          </div>
         ) : null}
       </div>
       <div className="editor-transport">
@@ -135,8 +161,18 @@ export function PreviewPlayer({
         >
           {isPlaying ? "Pause" : "Play"}
         </button>
-        <button type="button" onClick={() => scrub(0)}>
+        <button type="button" onClick={() => scrub(0)} aria-label="Go to start">
           Start
+        </button>
+        <button
+          type="button"
+          onClick={() =>
+            setFitMode((m) => (m === "contain" ? "cover" : "contain"))
+          }
+          aria-label={`Preview fit: ${fitMode}`}
+          title="Toggle fit / fill"
+        >
+          Fit: {fitMode}
         </button>
         <span className="editor-timecode">
           {formatTs(timeline?.playheadMs ?? 0)} / {formatTs(durationMs())}

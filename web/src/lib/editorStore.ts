@@ -8,6 +8,7 @@ import {
   computeTimelineDurationMs,
   deleteClip,
   moveClip,
+  setClipText as setClipTextOp,
   setClipVolume,
   setPlayhead,
   setTrackMuted,
@@ -25,6 +26,8 @@ interface EditorStore {
   pixelsPerSecond: number;
   history: TimelineHistory | null;
   dirty: boolean;
+  canUndo: boolean;
+  canRedo: boolean;
   init: (projectId: string, timeline: TimelineDocumentV1) => void;
   selectClip: (id: string | null) => void;
   setPlaying: (v: boolean) => void;
@@ -39,6 +42,7 @@ interface EditorStore {
     durationMs: number;
     startMs?: number;
   }) => void;
+  addTextClip: (input: { text: string; durationMs: number }) => void;
   deleteSelected: () => void;
   splitAtPlayhead: () => void;
   trimSelected: (edge: "in" | "out", timelineMs: number) => void;
@@ -48,10 +52,18 @@ interface EditorStore {
   liveTrimSelected: (edge: "in" | "out", timelineMs: number) => void;
   endGesture: () => void;
   setVolume: (volume: number) => void;
+  setClipText: (text: string) => void;
   toggleMute: (trackId: string) => void;
   zoomBy: (delta: number) => void;
   markSaved: () => void;
   durationMs: () => number;
+}
+
+function syncFlags(history: TimelineHistory | null) {
+  return {
+    canUndo: history?.canUndo ?? false,
+    canRedo: history?.canRedo ?? false,
+  };
 }
 
 export const useEditorStore = create<EditorStore>((set, get) => ({
@@ -62,6 +74,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   pixelsPerSecond: 80,
   history: null,
   dirty: false,
+  canUndo: false,
+  canRedo: false,
 
   init(projectId, timeline) {
     const history = new TimelineHistory(timeline);
@@ -73,6 +87,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       isPlaying: false,
       dirty: false,
       pixelsPerSecond: 80 * (timeline.zoom || 1),
+      ...syncFlags(history),
     });
   },
 
@@ -89,28 +104,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!history) return;
     const next = setPlayhead(history.state, ms);
     history.replace(next);
-    set({ timeline: history.state });
+    set({ timeline: history.state, ...syncFlags(history) });
   },
 
   commit(next) {
     const { history } = get();
     if (!history) return;
     history.commit(next);
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   undo() {
     const { history } = get();
     if (!history?.canUndo) return;
     history.undo();
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   redo() {
     const { history } = get();
     if (!history?.canRedo) return;
     history.redo();
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   addMediaClip(input) {
@@ -135,6 +150,26 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         trimOutMs: input.durationMs,
         volume: 1,
         label: input.label,
+      }),
+    );
+  },
+
+  addTextClip(input) {
+    const { timeline, commit } = get();
+    if (!timeline) return;
+    const track =
+      timeline.tracks.find((t) => t.kind === "captions") ??
+      timeline.tracks.find((t) => t.kind === "text");
+    if (!track) return;
+    commit(
+      addClip(timeline, track.id, {
+        startMs: timeline.playheadMs,
+        durationMs: input.durationMs,
+        trimInMs: 0,
+        trimOutMs: input.durationMs,
+        volume: 1,
+        label: input.text.slice(0, 48),
+        text: input.text,
       }),
     );
   },
@@ -174,27 +209,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { history, selectedClipId } = get();
     if (!history || !selectedClipId || !history.gestureOrigin) return;
     history.live(moveClip(history.gestureOrigin, selectedClipId, startMs));
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   liveTrimSelected(edge, timelineMs) {
     const { history, selectedClipId } = get();
     if (!history || !selectedClipId || !history.gestureOrigin) return;
     history.live(trimClip(history.gestureOrigin, selectedClipId, edge, timelineMs));
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   endGesture() {
     const { history } = get();
     if (!history) return;
     history.endGesture();
-    set({ timeline: history.state, dirty: true });
+    set({ timeline: history.state, dirty: true, ...syncFlags(history) });
   },
 
   setVolume(volume) {
     const { timeline, selectedClipId, commit } = get();
     if (!timeline || !selectedClipId) return;
     commit(setClipVolume(timeline, selectedClipId, volume));
+  },
+
+  setClipText(text) {
+    const { timeline, selectedClipId, commit } = get();
+    if (!timeline || !selectedClipId) return;
+    commit(setClipTextOp(timeline, selectedClipId, text));
   },
 
   toggleMute(trackId) {
@@ -213,6 +254,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({
       timeline: history.state,
       pixelsPerSecond: 80 * history.state.zoom,
+      ...syncFlags(history),
     });
   },
 

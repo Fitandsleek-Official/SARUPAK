@@ -3,24 +3,45 @@
 import type { MediaAsset } from "@/lib/api";
 import { useEditorStore } from "@/lib/editorStore";
 
+type MediaKind = "VIDEO" | "AUDIO" | "IMAGE";
+
 export function MediaLibraryPanel({
   media,
   onUpload,
   busy,
+  kinds,
+  title = "Media",
 }: {
   media: MediaAsset[];
   onUpload: (file: File) => void;
   busy: boolean;
+  kinds?: MediaKind[];
+  title?: string;
 }) {
   const addMediaClip = useEditorStore((s) => s.addMediaClip);
+  const filtered = kinds
+    ? media.filter((m) => kinds.includes(m.kind as MediaKind))
+    : media;
+
+  const accept = kinds
+    ? kinds
+        .map((k) =>
+          k === "VIDEO"
+            ? "video/*"
+            : k === "AUDIO"
+              ? "audio/*"
+              : "image/png,image/jpeg,image/webp,image/gif",
+        )
+        .join(",")
+    : "video/*,audio/*,image/png,image/jpeg,image/webp,image/gif";
 
   return (
-    <aside className="editor-library">
-      <h2>Media</h2>
+    <aside className="editor-library" aria-label={title}>
+      <h2>{title}</h2>
       <label className="editor-upload">
         <input
           type="file"
-          accept="video/*,audio/*,image/png,image/jpeg,image/webp,image/gif"
+          accept={accept}
           disabled={busy}
           onChange={(e) => {
             const f = e.target.files?.[0];
@@ -28,13 +49,17 @@ export function MediaLibraryPanel({
             e.currentTarget.value = "";
           }}
         />
-        Import media
+        Import {title.toLowerCase()}
       </label>
-      {media.length === 0 ? (
-        <p className="studio-empty">Import a video or audio file to begin.</p>
+      {filtered.length === 0 ? (
+        <p className="studio-empty">
+          {kinds?.length === 1 && kinds[0] === "AUDIO"
+            ? "Import an audio file to begin."
+            : "Import a video or audio file to begin."}
+        </p>
       ) : (
         <ul className="editor-media-list">
-          {media.map((m) => (
+          {filtered.map((m) => (
             <li key={m.id}>
               <div>
                 <strong>{m.originalName}</strong>
@@ -51,9 +76,10 @@ export function MediaLibraryPanel({
                 onClick={() =>
                   addMediaClip({
                     mediaAssetId: m.id,
-                    kind: m.kind as "VIDEO" | "AUDIO" | "IMAGE",
+                    kind: m.kind as MediaKind,
                     label: m.originalName,
-                    durationMs: m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000),
+                    durationMs:
+                      m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000),
                   })
                 }
               >
