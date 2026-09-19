@@ -38,7 +38,10 @@ export function MediaLibraryPanel({
   return (
     <aside className="editor-library" aria-label={title}>
       <h2>{title}</h2>
-      <label className="editor-upload">
+      <p className="studio-library-hint">
+        Import a file, then tap <strong>Add to timeline</strong>.
+      </p>
+      <label className={`editor-upload ${busy ? "is-busy" : ""}`}>
         <input
           type="file"
           accept={accept}
@@ -49,30 +52,36 @@ export function MediaLibraryPanel({
             e.currentTarget.value = "";
           }}
         />
-        Import {title.toLowerCase()}
+        {busy ? "Uploading…" : `+ Import ${title.toLowerCase()}`}
       </label>
       {filtered.length === 0 ? (
-        <p className="studio-empty">
-          {kinds?.length === 1 && kinds[0] === "AUDIO"
-            ? "Import an audio file to begin."
-            : "Import a video or audio file to begin."}
-        </p>
+        <div className="studio-library-empty">
+          <p>No files yet</p>
+          <span>
+            {kinds?.length === 1 && kinds[0] === "AUDIO"
+              ? "Import an MP3/WAV to start."
+              : "Import an MP4 to start editing."}
+          </span>
+        </div>
       ) : (
         <ul className="editor-media-list">
           {filtered.map((m) => (
-            <li key={m.id}>
-              <div>
-                <strong>{m.originalName}</strong>
+            <li key={m.id} className="editor-media-card">
+              <div className="editor-media-kind" data-kind={m.kind}>
+                {m.kind === "AUDIO" ? "AUD" : m.kind === "IMAGE" ? "IMG" : "VID"}
+              </div>
+              <div className="editor-media-meta">
+                <strong title={m.originalName}>{m.originalName}</strong>
                 <span>
-                  {m.kind}
                   {m.durationMs != null
-                    ? ` · ${(m.durationMs / 1000).toFixed(1)}s`
-                    : ""}
+                    ? `${(m.durationMs / 1000).toFixed(1)}s`
+                    : "—"}
                   {m.width && m.height ? ` · ${m.width}×${m.height}` : ""}
                 </span>
               </div>
               <button
                 type="button"
+                className="editor-media-add"
                 onClick={() =>
                   addMediaClip({
                     mediaAssetId: m.id,

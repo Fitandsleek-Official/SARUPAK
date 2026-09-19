@@ -29,7 +29,15 @@ export type MixMode =
 
 export type StemKind = "dialogue" | "music" | "sfx" | "ambient" | "full";
 
-export type ProviderKind = "mock" | "openai-tts" | "passthrough" | "demucs" | "manual" | "unavailable";
+export type ProviderKind =
+  | "mock"
+  | "openai-tts"
+  | "sotaka-tts"
+  | "passthrough"
+  | "demucs"
+  | "sotaka"
+  | "manual"
+  | "unavailable";
 
 export interface VoiceCharacter {
   id: string;
@@ -49,6 +57,9 @@ export interface VoiceCharacter {
 export interface VoiceAssignment {
   speakerId: string;
   voiceCharacterId: string;
+  /** Optional ≤12s clone reference media (SOTAKA). */
+  referenceMediaAssetId?: string;
+  referenceText?: string;
 }
 
 export interface DialogueSegment {
@@ -390,8 +401,30 @@ export function builtinVoiceCharacters(now = new Date().toISOString()): VoiceCha
       speakingRate: 1,
     }),
     base({
+      id: "voice_km_sotaka_male",
+      name: "SOTAKA Male (KM)",
+      genderLabel: "male",
+      language: "km",
+      provider: "sotaka-tts",
+      providerVoiceId: "sotaka_male",
+      style: "khmer-male",
+      pitch: 0,
+      speakingRate: 1,
+    }),
+    base({
+      id: "voice_km_sotaka_female",
+      name: "SOTAKA Female (KM)",
+      genderLabel: "female",
+      language: "km",
+      provider: "sotaka-tts",
+      providerVoiceId: "sotaka_female",
+      style: "khmer-female",
+      pitch: 0,
+      speakingRate: 1,
+    }),
+    base({
       id: "voice_km_placeholder",
-      name: "Khmer (requires capable provider)",
+      name: "Khmer (requires SOTAKA)",
       genderLabel: "neutral",
       language: "km",
       provider: "unavailable",
@@ -410,17 +443,26 @@ export function languageSupportedByVoice(
 ): { ok: boolean; reason?: string } {
   const lang = language.toLowerCase();
   if (voice.language !== lang && voice.language !== "multilingual") {
-    if (lang === "km") {
+    // SOTAKA voices are km-primary but may speak en text via the same clone path.
+    if (
+      !(
+        voice.provider === "sotaka-tts" &&
+        (lang === "km" || lang === "en") &&
+        (voice.language === "km" || voice.language === "en")
+      )
+    ) {
+      if (lang === "km") {
+        return {
+          ok: false,
+          reason:
+            "Khmer TTS requires SOTAKA (sotaka-tts). Configure SOTAKA_VOICE_URL and select SOTAKA.",
+        };
+      }
       return {
         ok: false,
-        reason:
-          "Khmer TTS is not available with the current voice/provider. Configure a Khmer-capable TTS provider before dubbing to km.",
+        reason: `Voice ${voice.id} is for language "${voice.language}", not "${language}".`,
       };
     }
-    return {
-      ok: false,
-      reason: `Voice ${voice.id} is for language "${voice.language}", not "${language}".`,
-    };
   }
   if (voice.provider === "unavailable") {
     return {
@@ -443,6 +485,16 @@ export function languageSupportedByVoice(
     return {
       ok: false,
       reason: "OpenAI voices require TTS provider openai-tts.",
+    };
+  }
+  if (
+    voice.provider === "sotaka-tts" &&
+    ttsProvider !== "sotaka-tts" &&
+    ttsProvider !== "sotaka"
+  ) {
+    return {
+      ok: false,
+      reason: "SOTAKA voices require TTS provider sotaka-tts.",
     };
   }
   return { ok: true };

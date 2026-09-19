@@ -37,6 +37,11 @@ export interface TTSInput {
   pitch: number;
   outputFormat: "wav" | "mp3";
   outputPath: string;
+  /** Optional local path to ≤12s reference wav (SOTAKA clone). */
+  referenceAudioPath?: string;
+  referenceText?: string;
+  /** Optional voice-design instruct string (SOTAKA). */
+  instruct?: string;
 }
 
 export interface TTSResult {

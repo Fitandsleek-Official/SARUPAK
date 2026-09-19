@@ -27,8 +27,8 @@ export class CreateDubbingSessionDto {
   targetLanguage?: string;
 
   @IsOptional()
-  @IsIn(["openai-tts", "mock"])
-  ttsProvider?: "openai-tts" | "mock";
+  @IsIn(["openai-tts", "mock", "sotaka-tts"])
+  ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
 }
 
 export class AssignVoiceDto {
@@ -37,6 +37,14 @@ export class AssignVoiceDto {
 
   @IsString()
   voiceCharacterId!: string;
+
+  @IsOptional()
+  @IsString()
+  referenceMediaAssetId?: string;
+
+  @IsOptional()
+  @IsString()
+  referenceText?: string;
 }
 
 class SegmentPatchDto {
@@ -78,8 +86,8 @@ export class UpdateDubbingSessionDto {
   mixMode?: "replace_dialogue" | "mix" | "dialogue_only" | "original_only";
 
   @IsOptional()
-  @IsIn(["openai-tts", "mock"])
-  ttsProvider?: "openai-tts" | "mock";
+  @IsIn(["openai-tts", "mock", "sotaka-tts"])
+  ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
 
   @IsOptional()
   @IsNumber()
@@ -124,6 +132,6 @@ export class GenerateTtsDto {
 
   /** Explicit provider for this run; overrides session if set. Never silent mock. */
   @IsOptional()
-  @IsIn(["openai-tts", "mock"])
-  ttsProvider?: "openai-tts" | "mock";
+  @IsIn(["openai-tts", "mock", "sotaka-tts"])
+  ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
 }

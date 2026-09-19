@@ -39,6 +39,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
   const [aspect, setAspect] = useState<"16:9" | "9:16" | "1:1">("16:9");
   const [activeTool, setActiveTool] = useState<StudioToolId>("media");
   const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [toolPanelOpen, setToolPanelOpen] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [apiOffline, setApiOffline] = useState<string | null>(null);
 
@@ -331,7 +332,10 @@ export function StudioEditor({ projectId }: { projectId: string }) {
           orientation="vertical"
         />
 
-        <div className="studio-shell-workspace">
+        <div
+          className={`studio-shell-workspace ${toolPanelOpen ? "" : "is-tool-collapsed"} ${inspectorOpen ? "" : "is-inspector-collapsed"}`}
+        >
+          {toolPanelOpen ? (
           <div
             className="studio-shell-tool-panel"
             id={`studio-tool-panel-${activeTool}`}
@@ -343,7 +347,6 @@ export function StudioEditor({ projectId }: { projectId: string }) {
                 media={media}
                 onUpload={onUpload}
                 busy={busy}
-                kinds={["VIDEO", "IMAGE"]}
                 title="Media"
               />
             ) : null}
@@ -376,9 +379,21 @@ export function StudioEditor({ projectId }: { projectId: string }) {
               <DubbingPanel projectId={projectId} media={media} />
             ) : null}
           </div>
+          ) : null}
 
           <div className="studio-shell-canvas">
             <div className="studio-shell-canvas-bar">
+              <button
+                type="button"
+                className="studio-panel-toggle"
+                onClick={() => setToolPanelOpen((v) => !v)}
+                aria-expanded={toolPanelOpen}
+              >
+                {toolPanelOpen ? "Hide panel" : "Show panel"}
+              </button>
+              <span className="studio-shell-canvas-hint">
+                Preview · click timeline clips to edit
+              </span>
               <button
                 type="button"
                 className="studio-inspector-toggle"
@@ -386,7 +401,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
                 aria-expanded={inspectorOpen}
                 aria-controls="studio-inspector"
               >
-                {inspectorOpen ? "Hide inspector" : "Show inspector"}
+                {inspectorOpen ? "Hide clip" : "Show clip"}
               </button>
             </div>
             <PreviewPlayer

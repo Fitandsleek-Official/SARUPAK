@@ -3,6 +3,7 @@ import { ConfigService } from "@nestjs/config";
 import { FfmpegService } from "../ffmpeg/ffmpeg.service";
 import { MockTtsProvider } from "./mock.tts-provider";
 import { OpenAiTtsProvider } from "./openai.tts-provider";
+import { SotakaTtsProvider } from "./sotaka.tts-provider";
 import type {
   TTSCapabilities,
   TTSInput,
@@ -48,12 +49,15 @@ export interface TTSStatusReport {
   envProvider: string | null;
   /** True when OPENAI_API_KEY is present (boolean only — no secret). */
   openaiConfigured: boolean;
+  /** True when SOTAKA_VOICE_URL is present. */
+  sotakaConfigured: boolean;
   providers: TTSCapabilities[];
   states: Record<string, TTSProviderState>;
   policy: {
     silentMockFallback: false;
     mockRequiresExplicitSelection: true;
-    khmerClaimed: false;
+    /** True when SOTAKA is configured — Khmer speech path exists. */
+    khmerClaimed: boolean;
   };
 }
 
@@ -61,6 +65,7 @@ export interface TTSStatusReport {
 export class TtsService {
   private readonly mock: MockTtsProvider;
   private readonly openai: OpenAiTtsProvider;
+  private readonly sotaka: SotakaTtsProvider;
   private readonly unavailable = new UnavailableTtsProvider();
 
   constructor(
@@ -69,11 +74,16 @@ export class TtsService {
   ) {
     this.mock = new MockTtsProvider(ffmpeg);
     this.openai = new OpenAiTtsProvider(config, ffmpeg);
+    this.sotaka = new SotakaTtsProvider(config, ffmpeg);
   }
 
   /** Exposed for unit tests that inject a fake fetch. */
   getOpenAiProvider(): OpenAiTtsProvider {
     return this.openai;
+  }
+
+  getSotakaProvider(): SotakaTtsProvider {
+    return this.sotaka;
   }
 
   private envProvider(): string | null {
@@ -85,24 +95,34 @@ export class TtsService {
 
   async status(language = "en"): Promise<TTSStatusReport> {
     const providers = [
+      await this.sotaka.getCapabilities(language),
       await this.mock.getCapabilities(language),
       await this.openai.getCapabilities(language),
       await this.unavailable.getCapabilities(language),
     ];
     const openaiConfigured = await this.openai.isAvailable();
+    const sotakaConfigured = await this.sotaka.isAvailable();
     const states: Record<string, TTSProviderState> = {};
     for (const p of providers) states[p.provider] = p.state;
 
+    let suggested: string | null = null;
+    const lang = language.toLowerCase();
+    if (lang === "km" && sotakaConfigured) suggested = "sotaka-tts";
+    else if (sotakaConfigured && lang === "km") suggested = "sotaka-tts";
+    else if (openaiConfigured && lang !== "km") suggested = "openai-tts";
+    else if (sotakaConfigured) suggested = "sotaka-tts";
+
     return {
-      suggestedProvider: openaiConfigured ? "openai-tts" : null,
+      suggestedProvider: suggested,
       envProvider: this.envProvider(),
       openaiConfigured,
+      sotakaConfigured,
       providers,
       states,
       policy: {
         silentMockFallback: false,
         mockRequiresExplicitSelection: true,
-        khmerClaimed: false,
+        khmerClaimed: sotakaConfigured,
       },
     };
   }
@@ -118,24 +138,27 @@ export class TtsService {
     status: TTSStatusReport;
   }> {
     const status = await this.status(language);
+    const env = status.envProvider;
     const active =
-      status.envProvider === "mock"
+      env === "mock"
         ? "mock"
-        : status.envProvider === "openai-tts" || status.envProvider === "openai"
+        : env === "openai-tts" || env === "openai"
           ? "openai-tts"
-          : status.suggestedProvider;
+          : env === "sotaka-tts" || env === "sotaka"
+            ? "sotaka-tts"
+            : status.suggestedProvider;
     return { active, providers: status.providers, status };
   }
 
   /**
    * Resolve a provider by explicit name.
-   * Never returns mock unless name === "mock" (or env forces mock and name omitted — not used here).
+   * Never returns mock unless name === "mock".
    */
   async resolveProvider(name: string): Promise<TTSProvider> {
     const requested = name.trim().toLowerCase();
     if (!requested) {
       throw new Error(
-        "TTS provider must be selected explicitly (openai-tts or mock).",
+        "TTS provider must be selected explicitly (sotaka-tts, openai-tts, or mock).",
       );
     }
     if (requested === "mock") return this.mock;
@@ -146,6 +169,14 @@ export class TtsService {
         );
       }
       return this.openai;
+    }
+    if (requested === "sotaka-tts" || requested === "sotaka") {
+      if (!(await this.sotaka.isAvailable())) {
+        throw new Error(
+          "not_configured: SOTAKA TTS selected but SOTAKA_VOICE_URL is missing.",
+        );
+      }
+      return this.sotaka;
     }
     if (requested === "unavailable") return this.unavailable;
     throw new Error(`Unknown TTS provider: ${name}`);
@@ -162,7 +193,6 @@ export class TtsService {
     try {
       return await provider.synthesize(input);
     } catch (err) {
-      // Re-throw as-is — do NOT catch and retry with mock.
       if (provider.name !== "mock" && err instanceof Error) {
         if (
           !err.message.startsWith("provider_error") &&

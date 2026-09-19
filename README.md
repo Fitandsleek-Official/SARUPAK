@@ -42,4 +42,4 @@ Ports & stale-process safety: [`docs/development/PORTS.md`](docs/development/POR
 For local dubbing without cloud TTS, set `TTS_PROVIDER=mock` (tone placeholders — not speech).  
 For subtitle generation without cloud ASR, set `STT_PROVIDER=mock` or leave unset for silence-segment fallback.
 
-Details: [`docs/development/SETUP.md`](docs/development/SETUP.md) · Phase 5: [`docs/architecture/PHASE-5.md`](docs/architecture/PHASE-5.md) · Phase 6: [`docs/architecture/PHASE-6-STUDIO-SHELL.md`](docs/architecture/PHASE-6-STUDIO-SHELL.md) · Phase 7: [`docs/architecture/PHASE-7.md`](docs/architecture/PHASE-7.md)
+Details: [`docs/development/SETUP.md`](docs/development/SETUP.md) · Phase 5: [`docs/architecture/PHASE-5.md`](docs/architecture/PHASE-5.md) · Phase 6: [`docs/architecture/PHASE-6-STUDIO-SHELL.md`](docs/architecture/PHASE-6-STUDIO-SHELL.md) · Phase 7: [`docs/architecture/PHASE-7.md`](docs/architecture/PHASE-7.md) · Phase 8: [`docs/architecture/PHASE-8.md`](docs/architecture/PHASE-8.md)

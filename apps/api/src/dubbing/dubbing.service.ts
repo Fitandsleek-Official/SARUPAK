@@ -66,21 +66,24 @@ export class DubbingService {
     const tts = await this.tts.capabilities();
     const sep = await this.separation.resolve();
     const dia = await this.diarization.resolve();
+    const trueIsolation = sep.name === "demucs" || sep.name === "sotaka";
     return {
       tts: {
         ...tts,
-        // Never expose secrets — only boolean configuration flags from status.
         openaiConfigured: tts.status.openaiConfigured,
+        sotakaConfigured: tts.status.sotakaConfigured,
         suggestedProvider: tts.status.suggestedProvider,
         policy: tts.status.policy,
       },
       separation: {
         active: sep.name,
-        trueIsolation: sep.name === "demucs",
+        trueIsolation,
         note:
           sep.name === "passthrough"
             ? "Passthrough fallback — original audio preserved; dialogue not isolated."
-            : undefined,
+            : sep.name === "sotaka"
+              ? "SOTAKA Vocal Remover — vocals vs instrumental (BGM kept for mix)."
+              : undefined,
       },
       diarization: { active: dia.name },
       consentNote: CUSTOM_VOICE_CONSENT_NOTE,
@@ -297,15 +300,59 @@ export class DubbingService {
         workDir,
       });
 
-      const separation = {
-        provider: result.provider,
-        available: result.available,
-        stems: result.stems.map((s) => ({
+      const stemRefs: Array<{
+        kind: string;
+        available: boolean;
+        note?: string;
+        mediaAssetId?: string;
+      }> = [];
+
+      for (const s of result.stems) {
+        let mediaAssetId: string | undefined;
+        if (s.available && s.path && (s.kind === "music" || s.kind === "dialogue")) {
+          try {
+            const buf = await fs.readFile(s.path);
+            if (buf.length > 64) {
+              const stemId = createId();
+              const storageKey = buildStorageKey({
+                userId,
+                projectId,
+                assetId: stemId,
+                safeBaseName: `stem-${s.kind}.wav`,
+              });
+              await this.storage.putObject(storageKey, buf, "audio/wav");
+              const probe = await this.ffmpeg.probeAudio(s.path);
+              await this.prisma.mediaAsset.create({
+                data: {
+                  id: stemId,
+                  projectId,
+                  userId,
+                  kind: "AUDIO",
+                  storageKey,
+                  originalName: `stem-${s.kind}.wav`,
+                  mimeType: "audio/wav",
+                  sizeBytes: BigInt(buf.length),
+                  durationMs: probe.durationMs,
+                },
+              });
+              mediaAssetId = stemId;
+            }
+          } catch {
+            // Keep stem metadata without media id
+          }
+        }
+        stemRefs.push({
           kind: s.kind,
           available: s.available,
           note: s.note,
-          // Never expose filesystem paths
-        })),
+          mediaAssetId,
+        });
+      }
+
+      const separation = {
+        provider: result.provider,
+        available: result.available,
+        stems: stemRefs,
         warning: result.warning,
       };
 
@@ -323,12 +370,33 @@ export class DubbingService {
         ...(result.warning ? [result.warning] : []),
       ];
 
+      // Prefer instrumental as mix background when available
+      const musicStem = stemRefs.find(
+        (s) => s.kind === "music" && s.available && s.mediaAssetId,
+      );
+      const trackPatch =
+        musicStem?.mediaAssetId &&
+        Array.isArray(session.tracks)
+          ? ((session.tracks as unknown as Array<Record<string, unknown>>) ?? []).map(
+              (t) =>
+                t.kind === "background" || t.kind === "music_sfx"
+                  ? { ...t, mediaAssetId: musicStem.mediaAssetId }
+                  : t,
+            )
+          : undefined;
+
       const updated = await this.prisma.dubbingSession.update({
         where: { id: sessionId },
         data: {
           status: "ready",
           separation: separation as unknown as Prisma.InputJsonValue,
           warnings: warnings as unknown as Prisma.InputJsonValue,
+          ...(trackPatch
+            ? { tracks: trackPatch as unknown as Prisma.InputJsonValue }
+            : {}),
+          ...(result.available && result.provider === "sotaka"
+            ? { mixMode: "replace_dialogue" }
+            : {}),
         },
       });
       return { session: this.toDto(updated), jobId: job.id };
@@ -502,7 +570,12 @@ export class DubbingService {
     userId: string,
     projectId: string,
     sessionId: string,
-    input: { speakerId: string; voiceCharacterId: string },
+    input: {
+      speakerId: string;
+      voiceCharacterId: string;
+      referenceMediaAssetId?: string;
+      referenceText?: string;
+    },
   ) {
     const session = await this.requireSession(userId, projectId, sessionId);
     const voice = builtinVoiceCharacters().find(
@@ -516,7 +589,7 @@ export class DubbingService {
       (await this.tts.capabilities(session.targetLanguage)).active;
     if (!providerName) {
       throw new BadRequestException(
-        "Select a TTS provider before assigning voices (openai-tts or mock).",
+        "Select a TTS provider before assigning voices (sotaka-tts, openai-tts, or mock).",
       );
     }
     if (voice.provider === "unavailable") {
@@ -524,10 +597,7 @@ export class DubbingService {
         `Voice ${voice.name} has no configured TTS provider.`,
       );
     }
-    if (
-      voice.provider === "mock" &&
-      providerName !== "mock"
-    ) {
+    if (voice.provider === "mock" && providerName !== "mock") {
       throw new BadRequestException(
         "Mock voices can only be used when TTS provider is explicitly set to mock.",
       );
@@ -541,6 +611,15 @@ export class DubbingService {
         "OpenAI voices require TTS provider openai-tts.",
       );
     }
+    if (
+      voice.provider === "sotaka-tts" &&
+      providerName !== "sotaka-tts" &&
+      providerName !== "sotaka"
+    ) {
+      throw new BadRequestException(
+        "SOTAKA voices require TTS provider sotaka-tts.",
+      );
+    }
     const langCheck = languageSupportedByVoice(
       voice,
       session.targetLanguage,
@@ -550,11 +629,38 @@ export class DubbingService {
       throw new BadRequestException(langCheck.reason);
     }
 
+    if (input.referenceMediaAssetId) {
+      const ref = await this.prisma.mediaAsset.findFirst({
+        where: {
+          id: input.referenceMediaAssetId,
+          projectId,
+          userId,
+          kind: "AUDIO",
+        },
+      });
+      if (!ref) {
+        throw new BadRequestException(
+          "Clone reference media not found (upload a ≤12s audio clip first).",
+        );
+      }
+    }
+
+    const assignment: VoiceAssignment = {
+      speakerId: input.speakerId,
+      voiceCharacterId: input.voiceCharacterId,
+      ...(input.referenceMediaAssetId
+        ? { referenceMediaAssetId: input.referenceMediaAssetId }
+        : {}),
+      ...(input.referenceText?.trim()
+        ? { referenceText: input.referenceText.trim() }
+        : {}),
+    };
+
     const assignments = [
       ...((session.voiceAssignments as unknown as VoiceAssignment[]) ?? []).filter(
         (a) => a.speakerId !== input.speakerId,
       ),
-      { speakerId: input.speakerId, voiceCharacterId: input.voiceCharacterId },
+      assignment,
     ];
     const speakers = ((session.speakers as unknown as DubbingSpeaker[]) ?? []).map(
       (s) =>
@@ -674,7 +780,10 @@ export class DubbingService {
           (voice.provider === "mock" && providerName !== "mock") ||
           (voice.provider === "openai-tts" &&
             providerName !== "openai-tts" &&
-            providerName !== "openai")
+            providerName !== "openai") ||
+          (voice.provider === "sotaka-tts" &&
+            providerName !== "sotaka-tts" &&
+            providerName !== "sotaka")
         ) {
           segments[i] = {
             ...seg,
@@ -702,6 +811,24 @@ export class DubbingService {
           input?.speakingRate ?? voice.speakingRate ?? 1,
         );
         const outPath = path.join(workDir, `${seg.id}.wav`);
+        const assignment = (
+          (session.voiceAssignments as unknown as VoiceAssignment[]) ?? []
+        ).find((a) => a.speakerId === seg.speakerId);
+
+        let referenceAudioPath: string | undefined;
+        if (assignment?.referenceMediaAssetId && this.storage.resolvePath) {
+          const refAsset = await this.prisma.mediaAsset.findFirst({
+            where: {
+              id: assignment.referenceMediaAssetId,
+              projectId,
+              userId,
+            },
+          });
+          if (refAsset) {
+            referenceAudioPath = this.storage.resolvePath(refAsset.storageKey);
+          }
+        }
+
         try {
           const result = await this.tts.synthesize(
             {
@@ -712,6 +839,8 @@ export class DubbingService {
               pitch: voice.pitch,
               outputFormat: "wav",
               outputPath: outPath,
+              referenceAudioPath,
+              referenceText: assignment?.referenceText,
             },
             { provider: providerName },
           );
@@ -939,7 +1068,26 @@ export class DubbingService {
       }
 
       let backgroundPath: string | undefined;
-      if (session.extractedAudioMediaId) {
+      const sepMeta = session.separation as
+        | {
+            stems?: Array<{
+              kind: string;
+              available?: boolean;
+              mediaAssetId?: string;
+            }>;
+          }
+        | null
+        | undefined;
+      const musicStem = sepMeta?.stems?.find(
+        (s) => s.kind === "music" && s.available && s.mediaAssetId,
+      );
+      if (musicStem?.mediaAssetId) {
+        const music = await this.prisma.mediaAsset.findFirst({
+          where: { id: musicStem.mediaAssetId, projectId, userId },
+        });
+        if (music) backgroundPath = this.storage.resolvePath(music.storageKey);
+      }
+      if (!backgroundPath && session.extractedAudioMediaId) {
         const bg = await this.prisma.mediaAsset.findFirst({
           where: { id: session.extractedAudioMediaId, projectId, userId },
         });
@@ -958,6 +1106,7 @@ export class DubbingService {
       await this.ffmpeg.mixDubbing({
         videoPath,
         backgroundAudioPath: backgroundPath,
+        backgroundIsIsolated: Boolean(musicStem?.mediaAssetId),
         dialogueSegments,
         mode: session.mixMode as MixMode,
         dialogueVolume: session.dialogueVolume,
@@ -1105,7 +1254,7 @@ export class DubbingService {
     const entry = caps.providers.find((p) => p.provider === provider);
     if (entry?.state === "unsupported_language") {
       throw new BadRequestException(
-        `unsupported_language: ${provider} does not support "${language}" (Khmer not claimed until verified).`,
+        `unsupported_language: ${provider} does not support "${language}".`,
       );
     }
   }
@@ -1117,21 +1266,31 @@ export class DubbingService {
   ): Promise<string> {
     const name = (requestProvider ?? sessionProvider ?? "").trim();
     if (!name) {
-      // Env TTS_PROVIDER=mock is an explicit ops choice for automated tests.
       const env = (process.env.TTS_PROVIDER ?? "").trim().toLowerCase();
-      if (env === "mock" || env === "openai-tts" || env === "openai") {
-        await this.assertTtsProviderAllowed(
-          env === "openai" ? "openai-tts" : env,
-          language,
-        );
-        return env === "openai" ? "openai-tts" : env;
+      if (
+        env === "mock" ||
+        env === "openai-tts" ||
+        env === "openai" ||
+        env === "sotaka-tts" ||
+        env === "sotaka"
+      ) {
+        const normalized =
+          env === "openai"
+            ? "openai-tts"
+            : env === "sotaka"
+              ? "sotaka-tts"
+              : env;
+        await this.assertTtsProviderAllowed(normalized, language);
+        return normalized;
       }
       throw new BadRequestException(
-        "Select a TTS provider explicitly (openai-tts or mock). Mock is never used as a silent fallback.",
+        "Select a TTS provider explicitly (sotaka-tts, openai-tts, or mock). Mock is never used as a silent fallback.",
       );
     }
     await this.assertTtsProviderAllowed(name, language);
-    return name === "openai" ? "openai-tts" : name;
+    if (name === "openai") return "openai-tts";
+    if (name === "sotaka") return "sotaka-tts";
+    return name;
   }
 
   private toDto(row: {

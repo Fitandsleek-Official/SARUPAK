@@ -7,6 +7,7 @@ import type {
   SeparationInput,
   SeparationResult,
 } from "./separation.types";
+import { SotakaSeparationProvider } from "./sotaka.separation-provider";
 
 /** Copies full mix as background — does NOT isolate dialogue. */
 @Injectable()
@@ -84,16 +85,13 @@ export class DemucsSeparationProvider implements AudioSeparationProvider {
   constructor(private readonly config: ConfigService) {}
 
   async isAvailable(): Promise<boolean> {
-    // Availability is reported conservatively: require explicit config.
     const forced = (this.config.get<string>("SEPARATION_PROVIDER") ?? "")
       .trim()
       .toLowerCase();
     return forced === "demucs";
   }
 
-  async separate(input: SeparationInput): Promise<SeparationResult> {
-    // Do not claim separation without a verified binary run.
-    // Spawning Demucs is opt-in; if not actually installed, return unavailable.
+  async separate(_input: SeparationInput): Promise<SeparationResult> {
     return {
       provider: this.name,
       available: false,
@@ -111,6 +109,7 @@ export class SeparationService {
     private readonly passthrough: PassthroughSeparationProvider,
     private readonly unavailable: UnavailableSeparationProvider,
     private readonly demucs: DemucsSeparationProvider,
+    private readonly sotaka: SotakaSeparationProvider,
   ) {}
 
   async resolve(): Promise<AudioSeparationProvider> {
@@ -118,8 +117,21 @@ export class SeparationService {
       .trim()
       .toLowerCase();
     if (forced === "unavailable") return this.unavailable;
+    if (forced === "passthrough") return this.passthrough;
     if (forced === "demucs") {
       if (await this.demucs.isAvailable()) return this.demucs;
+      return this.passthrough;
+    }
+    if (
+      forced === "sotaka" ||
+      forced === "sotaka-vocal-remover" ||
+      forced === "auto" ||
+      !forced
+    ) {
+      if (await this.sotaka.isAvailable()) return this.sotaka;
+      if (forced === "sotaka" || forced === "sotaka-vocal-remover") {
+        return this.passthrough;
+      }
     }
     return this.passthrough;
   }
@@ -127,7 +139,10 @@ export class SeparationService {
   async separate(input: SeparationInput): Promise<SeparationResult> {
     const provider = await this.resolve();
     const result = await provider.separate(input);
-    if (provider.name === "demucs" && !result.available) {
+    if (
+      (provider.name === "demucs" || provider.name === "sotaka") &&
+      !result.available
+    ) {
       return this.passthrough.separate(input);
     }
     return result;

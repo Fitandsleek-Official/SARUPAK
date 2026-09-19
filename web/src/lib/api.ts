@@ -285,7 +285,12 @@ export interface DubbingSession {
     displayName: string;
     voiceCharacterId?: string;
   }>;
-  voiceAssignments: Array<{ speakerId: string; voiceCharacterId: string }>;
+  voiceAssignments: Array<{
+    speakerId: string;
+    voiceCharacterId: string;
+    referenceMediaAssetId?: string;
+    referenceText?: string;
+  }>;
   segments: DialogueSegment[];
   separation?: {
     provider: string;
@@ -462,6 +467,7 @@ export const api = {
       tts: {
         active: string | null;
         openaiConfigured?: boolean;
+        sotakaConfigured?: boolean;
         suggestedProvider?: string | null;
         policy?: {
           silentMockFallback: boolean;
@@ -499,7 +505,7 @@ export const api = {
       subtitleSetId?: string;
       sourceLanguage?: string;
       targetLanguage?: string;
-      ttsProvider?: "openai-tts" | "mock";
+      ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
     },
   ) {
     return apiFetch<DubbingSession>(`/projects/${projectId}/dubbing/sessions`, {
@@ -517,7 +523,7 @@ export const api = {
     sessionId: string,
     patch: {
       mixMode?: DubbingSession["mixMode"];
-      ttsProvider?: "openai-tts" | "mock";
+      ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
       dialogueVolume?: number;
       backgroundVolume?: number;
       targetLanguage?: string;
@@ -558,7 +564,12 @@ export const api = {
   assignDubbingVoice(
     projectId: string,
     sessionId: string,
-    input: { speakerId: string; voiceCharacterId: string },
+    input: {
+      speakerId: string;
+      voiceCharacterId: string;
+      referenceMediaAssetId?: string;
+      referenceText?: string;
+    },
   ) {
     return apiFetch<DubbingSession>(
       `/projects/${projectId}/dubbing/sessions/${sessionId}/assign-voice`,
@@ -571,7 +582,7 @@ export const api = {
     input: {
       segmentIds?: string[];
       speakingRate?: number;
-      ttsProvider?: "openai-tts" | "mock";
+      ttsProvider?: "openai-tts" | "mock" | "sotaka-tts";
     },
   ) {
     return apiFetch<{

@@ -26,13 +26,18 @@ export function DubbingPanel({
   const [subtitleSetId, setSubtitleSetId] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("auto");
   const [targetLanguage, setTargetLanguage] = useState("en");
-  const [ttsProvider, setTtsProvider] = useState<"" | "openai-tts" | "mock">("");
+  const [ttsProvider, setTtsProvider] = useState<
+    "" | "openai-tts" | "mock" | "sotaka-tts"
+  >("");
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
+  const [sotakaConfigured, setSotakaConfigured] = useState(false);
   const [providerNote, setProviderNote] = useState("");
+  const [khmerClaimed, setKhmerClaimed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mixJob, setMixJob] = useState<Job | null>(null);
   const videos = media.filter((m) => m.kind === "VIDEO");
+  const audios = media.filter((m) => m.kind === "AUDIO");
 
   async function refreshSession(id?: string) {
     const sid = id ?? session?.id;
@@ -53,23 +58,29 @@ export function DubbingPanel({
         setVoices(voiceList);
         setSets(subList);
         setOpenaiConfigured(Boolean(prov.tts.openaiConfigured));
+        setSotakaConfigured(Boolean(prov.tts.sotakaConfigured));
+        setKhmerClaimed(Boolean(prov.tts.policy?.khmerClaimed));
         const states = (prov.tts.providers ?? [])
           .map((p) => `${p.provider}:${p.state ?? (p.available ? "ok" : "off")}`)
           .join(" · ");
         setProviderNote(
           `TTS ${states || prov.tts.active || "unset"}` +
+            (prov.tts.sotakaConfigured ? " · SOTAKA configured" : " · SOTAKA off") +
             (prov.tts.openaiConfigured ? " · OpenAI key configured" : " · OpenAI not configured") +
             ` · Separation: ${prov.separation.active}` +
-            (prov.separation.trueIsolation ? "" : " (no true isolation)") +
+            (prov.separation.trueIsolation ? " (true isolation)" : " (no true isolation)") +
             ` · Diarization: ${prov.diarization.active}`,
         );
-        if (prov.tts.suggestedProvider === "openai-tts") {
+        if (prov.tts.suggestedProvider === "sotaka-tts") {
+          setTtsProvider("sotaka-tts");
+        } else if (prov.tts.suggestedProvider === "openai-tts") {
           setTtsProvider("openai-tts");
         }
         if (sessions[0]) {
           setSession(sessions[0]);
-          if (sessions[0].ttsProvider === "mock" || sessions[0].ttsProvider === "openai-tts") {
-            setTtsProvider(sessions[0].ttsProvider);
+          const p = sessions[0].ttsProvider;
+          if (p === "mock" || p === "openai-tts" || p === "sotaka-tts") {
+            setTtsProvider(p);
           }
         }
         if (!mediaId && videos[0]) setMediaId(videos[0].id);
@@ -87,11 +98,21 @@ export function DubbingPanel({
       return;
     }
     if (!ttsProvider) {
-      setError("Select a TTS provider explicitly (OpenAI or Mock). Mock is never used silently.");
+      setError(
+        "Select a TTS provider explicitly (SOTAKA, OpenAI, or Mock). Mock is never used silently.",
+      );
       return;
     }
     if (ttsProvider === "openai-tts" && !openaiConfigured) {
-      setError("OpenAI TTS is not configured (no API key on server). Choose Mock explicitly for tones-only tests.");
+      setError(
+        "OpenAI TTS is not configured (no API key on server). Choose SOTAKA or Mock.",
+      );
+      return;
+    }
+    if (ttsProvider === "sotaka-tts" && !sotakaConfigured) {
+      setError(
+        "SOTAKA is not configured (set SOTAKA_VOICE_URL on the API). Choose OpenAI or Mock.",
+      );
       return;
     }
     setBusy(true);
@@ -174,18 +195,20 @@ export function DubbingPanel({
   const activeProvider = (session?.ttsProvider || ttsProvider || "") as
     | ""
     | "openai-tts"
-    | "mock";
+    | "mock"
+    | "sotaka-tts";
   const enabledVoices = voices.filter((v) => {
     if (!v.enabled || v.provider === "unavailable") return false;
-    // OpenAI TTS only claims English speech for now; still show en voices for km dub text review.
     const voiceLangOk =
       v.provider === "mock" ||
+      v.provider === "sotaka-tts" ||
       v.language === targetLanguage ||
       (targetLanguage === "km" && v.language === "en");
     if (!voiceLangOk) return false;
     if (!activeProvider) return false;
     if (activeProvider === "mock") return v.provider === "mock";
     if (activeProvider === "openai-tts") return v.provider === "openai-tts";
+    if (activeProvider === "sotaka-tts") return v.provider === "sotaka-tts";
     return false;
   });
 
@@ -255,9 +278,9 @@ export function DubbingPanel({
               onChange={(e) => setTargetLanguage(e.target.value)}
               disabled={busy}
             >
-              <option value="en">English (OpenAI TTS)</option>
+              <option value="en">English</option>
               <option value="km">
-                Khmer text (TTS not claimed — translate SRT first)
+                Khmer{khmerClaimed ? " (SOTAKA)" : " (needs SOTAKA)"}
               </option>
             </select>
           </label>
@@ -266,11 +289,17 @@ export function DubbingPanel({
             <select
               value={ttsProvider}
               onChange={(e) =>
-                setTtsProvider(e.target.value as "" | "openai-tts" | "mock")
+                setTtsProvider(
+                  e.target.value as "" | "openai-tts" | "mock" | "sotaka-tts",
+                )
               }
               disabled={busy}
             >
               <option value="">Select…</option>
+              <option value="sotaka-tts" disabled={!sotakaConfigured}>
+                SOTAKA (Khmer clone)
+                {sotakaConfigured ? "" : " (not configured)"}
+              </option>
               <option value="openai-tts" disabled={!openaiConfigured}>
                 OpenAI TTS{openaiConfigured ? "" : " (not configured)"}
               </option>
@@ -301,7 +330,10 @@ export function DubbingPanel({
               value={session.ttsProvider ?? ""}
               disabled={busy}
               onChange={(e) => {
-                const next = e.target.value as "openai-tts" | "mock";
+                const next = e.target.value as
+                  | "openai-tts"
+                  | "mock"
+                  | "sotaka-tts";
                 setTtsProvider(next);
                 void run(async () => {
                   await api.updateDubbingSession(projectId, session.id, {
@@ -312,6 +344,10 @@ export function DubbingPanel({
             >
               <option value="" disabled>
                 Select…
+              </option>
+              <option value="sotaka-tts" disabled={!sotakaConfigured}>
+                SOTAKA (Khmer clone)
+                {sotakaConfigured ? "" : " (not configured)"}
               </option>
               <option value="openai-tts" disabled={!openaiConfigured}>
                 OpenAI TTS{openaiConfigured ? "" : " (not configured)"}
@@ -341,7 +377,8 @@ export function DubbingPanel({
                 })
               }
             >
-              Separate (fallback OK)
+              Separate
+              {session.separation?.available ? " ✓" : " (BGM isolate)"}
             </button>
             <button
               type="button"
@@ -385,7 +422,10 @@ export function DubbingPanel({
               onClick={() =>
                 void run(async () => {
                   await api.generateDubbingTts(projectId, session.id, {
-                    ttsProvider: session.ttsProvider as "openai-tts" | "mock",
+                    ttsProvider: session.ttsProvider as
+                      | "openai-tts"
+                      | "mock"
+                      | "sotaka-tts",
                   });
                 })
               }
@@ -461,41 +501,99 @@ export function DubbingPanel({
             />
           </label>
 
-          {speakers.map((sp) => (
-            <label key={sp.speakerId}>
-              Voice · {sp.displayName}
-              <select
-                disabled={busy || enabledVoices.length === 0}
-                value={
-                  session.voiceAssignments.find(
-                    (a) => a.speakerId === sp.speakerId,
-                  )?.voiceCharacterId ??
-                  sp.voiceCharacterId ??
-                  ""
-                }
-                onChange={(e) =>
-                  void run(async () => {
-                    await api.assignDubbingVoice(projectId, session.id, {
-                      speakerId: sp.speakerId,
-                      voiceCharacterId: e.target.value,
-                    });
-                  })
-                }
-              >
-                <option value="">Select…</option>
-                {enabledVoices.map((v) => (
-                  <option key={v.id} value={v.id}>
-                    {v.name}
-                    {v.genderLabel ? ` · ${v.genderLabel}` : ""} ({v.provider})
-                  </option>
-                ))}
-              </select>
-            </label>
-          ))}
+          {speakers.map((sp) => {
+            const assignment = session.voiceAssignments.find(
+              (a) => a.speakerId === sp.speakerId,
+            );
+            return (
+              <div key={sp.speakerId} className="studio-voice-slot">
+                <label>
+                  Voice · {sp.displayName}
+                  <select
+                    disabled={busy || enabledVoices.length === 0}
+                    value={assignment?.voiceCharacterId ?? sp.voiceCharacterId ?? ""}
+                    onChange={(e) =>
+                      void run(async () => {
+                        await api.assignDubbingVoice(projectId, session.id, {
+                          speakerId: sp.speakerId,
+                          voiceCharacterId: e.target.value,
+                          referenceMediaAssetId: assignment?.referenceMediaAssetId,
+                          referenceText: assignment?.referenceText,
+                        });
+                      })
+                    }
+                  >
+                    <option value="">Select…</option>
+                    {enabledVoices.map((v) => (
+                      <option key={v.id} value={v.id}>
+                        {v.name}
+                        {v.genderLabel ? ` · ${v.genderLabel}` : ""} ({v.provider})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {activeProvider === "sotaka-tts" ? (
+                  <>
+                    <label>
+                      Clone ref ≤12s ({sp.displayName})
+                      <select
+                        disabled={busy || !assignment?.voiceCharacterId}
+                        value={assignment?.referenceMediaAssetId ?? ""}
+                        onChange={(e) =>
+                          void run(async () => {
+                            if (!assignment?.voiceCharacterId) return;
+                            await api.assignDubbingVoice(projectId, session.id, {
+                              speakerId: sp.speakerId,
+                              voiceCharacterId: assignment.voiceCharacterId,
+                              referenceMediaAssetId: e.target.value || undefined,
+                              referenceText: assignment.referenceText,
+                            });
+                          })
+                        }
+                      >
+                        <option value="">Voice design only (no clone)</option>
+                        {audios.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.originalName}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Upload clone clip
+                      <input
+                        type="file"
+                        accept="audio/*,.wav,.mp3,.m4a"
+                        disabled={busy || !assignment?.voiceCharacterId}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          e.target.value = "";
+                          if (!file || !assignment?.voiceCharacterId) return;
+                          void run(async () => {
+                            const uploaded = await api.uploadMedia(
+                              projectId,
+                              file,
+                            );
+                            await api.assignDubbingVoice(projectId, session.id, {
+                              speakerId: sp.speakerId,
+                              voiceCharacterId: assignment.voiceCharacterId,
+                              referenceMediaAssetId: uploaded.id,
+                              referenceText: assignment.referenceText,
+                            });
+                          });
+                        }}
+                      />
+                    </label>
+                  </>
+                ) : null}
+              </div>
+            );
+          })}
 
           <p className="studio-note">
-            Foley/SFX stay in background mix when separation is unavailable
-            (passthrough). True dialogue isolation is not claimed yet.
+            {activeProvider === "sotaka-tts"
+              ? "SOTAKA: translate → KM, assign M/F + optional ≤12s clone, Separate (keep BGM), Generate, Mix."
+              : "Foley/SFX stay in background when separation is passthrough. Use SOTAKA for Khmer clone + BGM isolate."}
           </p>
 
           {session.warnings.length > 0 ? (

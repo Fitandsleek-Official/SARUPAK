@@ -41,6 +41,8 @@ export interface DubMixInput {
   videoPath: string;
   /** Full original / background audio (optional for dialogue_only). */
   backgroundAudioPath?: string;
+  /** True when background is instrumental-only (SOTAKA Vocal Remover). */
+  backgroundIsIsolated?: boolean;
   dialogueSegments: DubMixSegment[];
   mode: "replace_dialogue" | "mix" | "dialogue_only" | "original_only";
   dialogueVolume: number;
@@ -350,7 +352,7 @@ export class FfmpegService {
       // Mix background + dialogue with soft limiter
       const mixed = path.join(workDir, "mixed.wav");
       const bgGain =
-        input.mode === "replace_dialogue"
+        input.mode === "replace_dialogue" && !input.backgroundIsIsolated
           ? bgVol * 0.35
           : bgVol;
       await this.run(this.ffmpegBin, [
@@ -758,6 +760,43 @@ export class FfmpegService {
       "pcm_s16le",
       outputWavPath,
     ]);
+    return this.probeAudio(outputWavPath);
+  }
+
+  /** Concatenate WAV/audio parts end-to-end (re-encode for format safety). */
+  async concatAudioWavs(
+    inputPaths: string[],
+    outputWavPath: string,
+    sampleRate = 48000,
+  ): Promise<AudioProbeResult> {
+    if (inputPaths.length === 0) {
+      throw new Error("concatAudioWavs requires at least one input.");
+    }
+    const safe = inputPaths.map((p) => this.assertSafeMediaPath(p));
+    await fs.mkdir(path.dirname(outputWavPath), { recursive: true });
+    if (safe.length === 1) {
+      return this.reencodeToWav(safe[0]!, outputWavPath, sampleRate);
+    }
+    const args: string[] = ["-y"];
+    for (const p of safe) {
+      args.push("-i", p);
+    }
+    const n = safe.length;
+    const labels = Array.from({ length: n }, (_, i) => `[${i}:a]`).join("");
+    args.push(
+      "-filter_complex",
+      `${labels}concat=n=${n}:v=0:a=1[aout]`,
+      "-map",
+      "[aout]",
+      "-ac",
+      "1",
+      "-ar",
+      String(Math.round(this.assertPositiveNumber(sampleRate, "sampleRate", 192000))),
+      "-c:a",
+      "pcm_s16le",
+      outputWavPath,
+    );
+    await this.run(this.ffmpegBin, args);
     return this.probeAudio(outputWavPath);
   }
 

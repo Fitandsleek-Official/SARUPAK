@@ -37,7 +37,7 @@ MP4 → STT (en|zh|ja|km|auto)
 |---------|--------|
 | Auto gender / multi-speaker ML diarization | **Not implemented** — manual M/F slots |
 | True dialogue vs foley separation | Passthrough only |
-| Khmer TTS speech | **Not claimed** |
+| Khmer TTS speech | **Phase 8:** claimed when `SOTAKA_VOICE_URL` is set (`sotaka-tts`) |
 | ASR quality for km/zh/ja | Depends on Whisper; live quality not certified here |
 | `ws://127.0.0.1:5500` errors | **Not SARUPAK** — VS Code Live Server; ignore for Studio |
 | Project `503 Offline` | Usually Railway API down / wrong `NEXT_PUBLIC_API_URL` / cold start |

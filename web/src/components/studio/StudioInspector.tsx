@@ -13,6 +13,7 @@ export function StudioInspector({
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const setVolume = useEditorStore((s) => s.setVolume);
   const setClipText = useEditorStore((s) => s.setClipText);
+  const deleteSelected = useEditorStore((s) => s.deleteSelected);
   const selected = findSelectedClip(timeline, selectedClipId);
   const track = selected
     ? timeline?.tracks.find((t) => t.clips.some((c) => c.id === selected.id))
@@ -27,7 +28,7 @@ export function StudioInspector({
       id="studio-inspector"
     >
       <div className="studio-inspector-header">
-        <h2>Inspector</h2>
+        <h2>Clip</h2>
         {onClose ? (
           <button
             type="button"
@@ -41,52 +42,21 @@ export function StudioInspector({
       </div>
 
       {!selected ? (
-        <p className="studio-empty">Select a clip on the timeline to edit properties.</p>
+        <p className="studio-empty">
+          Click a green/blue clip on the timeline below to edit it here.
+        </p>
       ) : (
         <div className="studio-inspector-body">
-          <section className="studio-inspector-section">
-            <h3>Basic</h3>
-            <p className="studio-inspector-meta">
-              <strong>{selected.label ?? selected.id}</strong>
-            </p>
-            <p className="studio-inspector-meta">
-              Track: {track?.name ?? "—"} ({track?.kind ?? "—"})
-            </p>
-            <dl className="studio-inspector-dl">
-              <div>
-                <dt>Start</dt>
-                <dd>{(selected.startMs / 1000).toFixed(2)}s</dd>
-              </div>
-              <div>
-                <dt>Duration</dt>
-                <dd>{(selected.durationMs / 1000).toFixed(2)}s</dd>
-              </div>
-              <div>
-                <dt>Trim in</dt>
-                <dd>{(selected.trimInMs / 1000).toFixed(2)}s</dd>
-              </div>
-              <div>
-                <dt>Trim out</dt>
-                <dd>{(selected.trimOutMs / 1000).toFixed(2)}s</dd>
-              </div>
-            </dl>
-            <p className="studio-empty">
-              Trim and move on the timeline. Timing fields are read-only here.
-            </p>
-          </section>
+          <p className="studio-inspector-title">
+            {selected.label ?? selected.id}
+          </p>
+          <p className="studio-inspector-meta">
+            {track?.name ?? "Track"} · {(selected.durationMs / 1000).toFixed(1)}s
+          </p>
 
           <section className="studio-inspector-section">
-            <h3>Transform</h3>
-            <p className="studio-note" role="status">
-              Position, scale, rotation, and opacity are not in the current data
-              model — controls omitted until schema support lands.
-            </p>
-          </section>
-
-          <section className="studio-inspector-section">
-            <h3>Audio</h3>
+            <h3>Volume</h3>
             <label className="studio-inspector-field">
-              Volume
               <input
                 type="range"
                 min={0}
@@ -94,23 +64,20 @@ export function StudioInspector({
                 step={0.05}
                 value={selected.volume}
                 onChange={(e) => setVolume(Number(e.target.value))}
-                aria-valuemin={0}
-                aria-valuemax={2}
-                aria-valuenow={selected.volume}
+                aria-label="Clip volume"
               />
               <span className="studio-inspector-value">
-                {selected.volume.toFixed(2)}
+                {Math.round(selected.volume * 100)}%
               </span>
             </label>
           </section>
 
-          <section className="studio-inspector-section">
-            <h3>Text / subtitle</h3>
-            {track?.kind === "text" ||
+          {(track?.kind === "text" ||
             track?.kind === "captions" ||
-            selected.text != null ? (
+            selected.text != null) && (
+            <section className="studio-inspector-section">
+              <h3>Text</h3>
               <label className="studio-inspector-field">
-                Clip text
                 <textarea
                   value={selected.text ?? ""}
                   rows={3}
@@ -119,16 +86,42 @@ export function StudioInspector({
                   aria-label="Clip text"
                 />
               </label>
-            ) : (
-              <p className="studio-empty">
-                Select a text/captions clip, or use the Captions tool for
-                subtitle sets.
-              </p>
-            )}
+            </section>
+          )}
+
+          <section className="studio-inspector-section is-compact">
+            <h3>Timing</h3>
+            <p className="studio-inspector-meta">
+              Drag the clip or its edges on the timeline to trim.
+            </p>
+            <dl className="studio-inspector-dl">
+              <div>
+                <dt>In</dt>
+                <dd>{(selected.startMs / 1000).toFixed(1)}s</dd>
+              </div>
+              <div>
+                <dt>Out</dt>
+                <dd>
+                  {(
+                    (selected.startMs + selected.durationMs) /
+                    1000
+                  ).toFixed(1)}
+                  s
+                </dd>
+              </div>
+            </dl>
           </section>
 
-          <p className="studio-empty studio-inspector-shortcuts">
-            Space play · S split · Del delete · ⌘Z undo
+          <button
+            type="button"
+            className="studio-inspector-danger"
+            onClick={() => deleteSelected()}
+          >
+            Delete clip
+          </button>
+
+          <p className="studio-inspector-shortcuts">
+            Space = play · S = split · Del = delete
           </p>
         </div>
       )}

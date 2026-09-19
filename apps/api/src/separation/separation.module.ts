@@ -5,12 +5,14 @@ import {
   SeparationService,
   UnavailableSeparationProvider,
 } from "./separation.service";
+import { SotakaSeparationProvider } from "./sotaka.separation-provider";
 
 @Module({
   providers: [
     PassthroughSeparationProvider,
     UnavailableSeparationProvider,
     DemucsSeparationProvider,
+    SotakaSeparationProvider,
     SeparationService,
   ],
   exports: [SeparationService],
