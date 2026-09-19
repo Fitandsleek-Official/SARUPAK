@@ -9,7 +9,22 @@ const DEFAULT_CORS = [
   "http://127.0.0.1:3010",
   "http://localhost:3000",
   "http://127.0.0.1:3000",
+  "https://sarupak.vercel.app",
 ].join(",");
+
+function isAllowedOrigin(origin: string, configured: string[]): boolean {
+  if (configured.includes(origin)) return true;
+  // Vercel production + preview deployments
+  try {
+    const host = new URL(origin).hostname;
+    if (host === "sarupak.vercel.app" || host.endsWith(".vercel.app")) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
 
 async function bootstrap() {
   // Prefer Railway-injected PORT over any stale local default.
@@ -26,7 +41,14 @@ async function bootstrap() {
     .filter(Boolean);
 
   app.enableCors({
-    origin: origins,
+    origin: (origin, callback) => {
+      // Non-browser / same-origin tools send no Origin
+      if (!origin || isAllowedOrigin(origin, origins)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   });
 

@@ -41,6 +41,14 @@ export function isBrowserOnDeployedHost(): boolean {
   return host !== "localhost" && host !== "127.0.0.1";
 }
 
+function isRailwayApiUrl(url: string = API_URL): boolean {
+  try {
+    return new URL(url).hostname.endsWith(".up.railway.app");
+  } catch {
+    return false;
+  }
+}
+
 export async function verifyExpectedApi(): Promise<ApiHealthInfo> {
   let res: Response;
   try {
@@ -53,6 +61,13 @@ export async function verifyExpectedApi(): Promise<ApiHealthInfo> {
         null,
       );
     }
+    if (isRailwayApiUrl()) {
+      throw new ApiError(
+        0,
+        `Cannot reach Railway API at ${API_URL}. Deploy logs may show Nest listening, but the public domain Target port must match that port (often 8080): Railway → API service → Settings → Networking → Public Networking. Browser “CORS” errors on this URL usually mean Railway returned 502, not a Nest CORS misconfig.`,
+        null,
+      );
+    }
     throw new ApiError(
       0,
       `Cannot reach SARUPAK API at ${API_URL}. Start it with: npm run dev:api (port ${EXPECTED_API_DEV_PORT}).`,
@@ -61,9 +76,12 @@ export async function verifyExpectedApi(): Promise<ApiHealthInfo> {
   }
   const body = (await res.json().catch(() => null)) as ApiHealthInfo | null;
   if (!res.ok || !body) {
+    const railwayHint = isRailwayApiUrl()
+      ? ` If this is Railway, set the public domain Target port to the listen port from Deploy Logs (often 8080).`
+      : ` Is SARUPAK API running on port ${EXPECTED_API_DEV_PORT}?`;
     throw new ApiError(
       res.status,
-      `API health failed at ${API_URL}/health (HTTP ${res.status}). Is SARUPAK API running on port ${EXPECTED_API_DEV_PORT}?`,
+      `API health failed at ${API_URL}/health (HTTP ${res.status}).${railwayHint}`,
       body,
     );
   }

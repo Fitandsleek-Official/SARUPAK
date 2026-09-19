@@ -19,8 +19,18 @@ Root Directory: **`/`** (repo root)
 |----------|--------|
 | `DATABASE_URL` | **Reference** the Postgres plugin — see below. Never paste the API public URL. |
 | `JWT_SECRET` | Long random string |
-| `CORS_ORIGINS` | `https://sarupak.vercel.app` (+ preview URLs if needed) |
-| `PORT` | **Leave unset** — Railway injects it |
+| `CORS_ORIGINS` | Optional — API already allows `https://sarupak.vercel.app` and `*.vercel.app` |
+| `PORT` | **Leave unset** — Railway injects it (often `8080`) |
+
+### Public domain Target port (required for Studio on Vercel)
+
+Deploy Logs showing `listening on 0.0.0.0:8080` while the browser shows CORS / “Cannot reach API” usually means the **edge cannot reach Nest** (HTTP 502 with no CORS headers).
+
+1. Open Deploy Logs → note the port in `SARUPAK API listening on 0.0.0.0:<PORT>`
+2. API service → **Settings → Networking → Public Networking**
+3. Click the `*.up.railway.app` domain → set **Target port** to that `<PORT>` (e.g. **8080**)
+4. Or delete the domain and **Generate Domain** again so Railway picks the correct port
+5. Verify: `curl https://sarupakapi-production.up.railway.app/v1/health` returns JSON (not 502)
 | `STORAGE_DRIVER` | `local` |
 | `STORAGE_LOCAL_PATH` | `./storage` |
 | `TTS_PROVIDER` | `mock` (until OpenAI key is set) |
@@ -47,13 +57,13 @@ Use your Postgres service name if it is not `Postgres` (Railway UI shows the exa
 
 ## Healthcheck / “Application failed to respond”
 
-1. Open **Deploy Logs** (not Build) — look for:
-   - `SARUPAK API listening on 0.0.0.0:…`
-   - `DATABASE_URL host=…`
-   - `Postgres $connect failed` / P1001
-2. Fix `DATABASE_URL` as above, then **Redeploy**
-3. After a good boot: `curl https://<host>/v1/health` should return JSON with `"service":"sarupak-api"` and `"database":"up"`
-4. If `"database":"down"` the HTTP server is fine — only the DB URL/link is wrong
+App can be healthy in **Deploy Logs** and still 502 publicly if the **public domain target port** does not match the listen port.
+
+1. In Deploy Logs, find: `SARUPAK API listening on 0.0.0.0:<PORT>/v1`
+2. API service → **Settings → Networking → Public Networking** → domain → **Target port** = that same `<PORT>` (often `8080`). Not `3000` / `4003` unless you forced `PORT` to that value.
+3. Confirm logs show `DATABASE_URL host=postgres.railway.internal` and `Postgres connected`
+4. `curl https://<host>/v1/health` → `"service":"sarupak-api"` and `"database":"up"`
+5. If `"database":"down"` the HTTP server is fine — only the DB URL/link is wrong
 
 ## After first healthy deploy
 
