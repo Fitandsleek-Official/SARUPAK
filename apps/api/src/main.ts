@@ -35,13 +35,16 @@ async function bootstrap() {
   );
 
   const port = Number(config.get("PORT") ?? SARUPAK_DEFAULT_PORT);
-  await app.listen(port);
+  // Railway / Docker: must bind all interfaces (not only localhost).
+  await app.listen(port, "0.0.0.0");
   // eslint-disable-next-line no-console
   console.log(
-    `SARUPAK API (${SARUPAK_DEFAULT_PORT === port ? "dev-default" : "custom"}) listening on http://localhost:${port}/v1`,
+    `SARUPAK API listening on 0.0.0.0:${port}/v1 (health: /v1/health)`,
   );
-  // eslint-disable-next-line no-console
-  console.log(`Health: http://localhost:${port}/v1/health`);
 }
 
-void bootstrap();
+void bootstrap().catch((err) => {
+  // eslint-disable-next-line no-console
+  console.error("SARUPAK API failed to start:", err);
+  process.exit(1);
+});
