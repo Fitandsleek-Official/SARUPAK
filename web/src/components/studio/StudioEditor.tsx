@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent as ReactMouseEvent } from "react";
 import {
   api,
   getApiBaseUrl,
@@ -47,13 +47,13 @@ export function StudioEditor({ projectId }: { projectId: string }) {
 
   function startResize(
     edge: "tool" | "inspector",
-    ev: MouseEvent,
+    ev: ReactMouseEvent,
   ) {
     ev.preventDefault();
     const startX = ev.clientX;
     const startTool = toolPanelWidth;
     const startInsp = inspectorWidth;
-    const onMove = (e: MouseEvent) => {
+    const onMove = (e: globalThis.MouseEvent) => {
       const dx = e.clientX - startX;
       if (edge === "tool") {
         setToolPanelWidth(Math.min(480, Math.max(220, startTool + dx)));
