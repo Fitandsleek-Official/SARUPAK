@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev -p 3010",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start -p 3010",
     "lint": "eslint",
     "postinstall": "node -e \"const fs=require('fs');const p=require('path');const s=p.join('node_modules','@ffmpeg','ffmpeg','dist','esm');const d=p.join('public','ffmpeg');if(!fs.existsSync(s))process.exit(0);fs.mkdirSync(d,{recursive:true});for (const f of ['worker.js','const.js','errors.js']) fs.copyFileSync(p.join(s,f),p.join(d,f));\""
