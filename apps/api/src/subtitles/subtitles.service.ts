@@ -33,6 +33,7 @@ import {
   STORAGE_SERVICE,
   type StorageService,
 } from "../storage/storage.tokens";
+import { TranslateService } from "../translate/translate.service";
 import { renderSegmentOverlays } from "./overlay-renderer";
 
 @Injectable()
@@ -45,6 +46,7 @@ export class SubtitlesService {
     private readonly jobs: JobsService,
     private readonly ffmpeg: FfmpegService,
     private readonly stt: SttService,
+    private readonly translate: TranslateService,
     private readonly config: ConfigService,
     @Inject(STORAGE_SERVICE) private readonly storage: StorageService,
   ) {}
@@ -280,6 +282,97 @@ export class SubtitlesService {
     return toVtt(set.segments);
   }
 
+  /**
+   * Create a new Khmer subtitle set by translating cues (timing preserved).
+   * Never silently copies source text when translation fails.
+   */
+  async translateToKhmer(userId: string, projectId: string, setId: string) {
+    const source = await this.get(userId, projectId, setId);
+    if (source.segments.length === 0) {
+      throw new BadRequestException("Subtitle set has no segments to translate.");
+    }
+
+    const job = await this.jobs.enqueue({
+      userId,
+      projectId,
+      type: "STT",
+      input: { kind: "translate", subtitleSetId: setId, target: "km" },
+    });
+
+    try {
+      await this.prisma.job.update({
+        where: { id: job.id },
+        data: { status: "RUNNING", progress: 0.2 },
+      });
+
+      const result = await this.translate.translateToKhmer(
+        source.segments.map((s) => ({ id: s.id, text: s.text })),
+        source.language,
+      );
+
+      const translated: SubtitleSegment[] = source.segments.map((s) => {
+        const hit = result.cues.find((c) => c.id === s.id);
+        return {
+          ...s,
+          id: `${s.id}_km`,
+          text: hit?.text ?? "",
+        };
+      });
+
+      const validation = validateSegments(translated);
+      if (!validation.ok) {
+        throw new BadRequestException(validation.reason);
+      }
+
+      const set = await this.prisma.subtitleSet.create({
+        data: {
+          projectId,
+          language: "km",
+          segments: translated as unknown as Prisma.InputJsonValue,
+          style: {
+            ...DEFAULT_SUBTITLE_STYLE,
+            ...(source.style ?? {}),
+          } as unknown as Prisma.InputJsonValue,
+        },
+      });
+
+      await this.prisma.job.update({
+        where: { id: job.id },
+        data: {
+          status: "SUCCEEDED",
+          progress: 1,
+          output: {
+            sourceSetId: setId,
+            subtitleSetId: set.id,
+            provider: result.provider,
+            warnings: result.warnings,
+          },
+        },
+      });
+
+      return {
+        subtitleSet: this.toDto(set),
+        sourceSetId: setId,
+        provider: result.provider,
+        warnings: [
+          ...result.warnings,
+          "Translated set is Khmer (km). Review cues before burn-in or dubbing.",
+        ],
+        jobId: job.id,
+      };
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Translate to Khmer failed";
+      await this.prisma.job.update({
+        where: { id: job.id },
+        data: { status: "FAILED", error: message },
+      });
+      throw err instanceof BadRequestException
+        ? err
+        : new BadRequestException(message);
+    }
+  }
+
   async burnIn(
     userId: string,
     projectId: string,
@@ -421,7 +514,13 @@ export class SubtitlesService {
   }
 
   async providers() {
-    return this.stt.describeAvailability();
+    const stt = await this.stt.describeAvailability();
+    const translate = await this.translate.status();
+    return {
+      ...stt,
+      translate,
+      supportedAsrLanguages: ["en", "zh", "ja", "km", "auto"],
+    };
   }
 
   toDto(set: {

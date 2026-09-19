@@ -24,6 +24,7 @@ export function DubbingPanel({
   const [sets, setSets] = useState<SubtitleSet[]>([]);
   const [mediaId, setMediaId] = useState("");
   const [subtitleSetId, setSubtitleSetId] = useState("");
+  const [sourceLanguage, setSourceLanguage] = useState("auto");
   const [targetLanguage, setTargetLanguage] = useState("en");
   const [ttsProvider, setTtsProvider] = useState<"" | "openai-tts" | "mock">("");
   const [openaiConfigured, setOpenaiConfigured] = useState(false);
@@ -100,7 +101,7 @@ export function DubbingPanel({
         mediaAssetId: mediaId,
         subtitleSetId: subtitleSetId || undefined,
         targetLanguage,
-        sourceLanguage: "en",
+        sourceLanguage: sourceLanguage === "auto" ? "und" : sourceLanguage,
         ttsProvider,
       });
       setSession(created);
@@ -176,12 +177,25 @@ export function DubbingPanel({
     | "mock";
   const enabledVoices = voices.filter((v) => {
     if (!v.enabled || v.provider === "unavailable") return false;
-    if (v.language !== targetLanguage && v.provider !== "mock") return false;
+    // OpenAI TTS only claims English speech for now; still show en voices for km dub text review.
+    const voiceLangOk =
+      v.provider === "mock" ||
+      v.language === targetLanguage ||
+      (targetLanguage === "km" && v.language === "en");
+    if (!voiceLangOk) return false;
     if (!activeProvider) return false;
     if (activeProvider === "mock") return v.provider === "mock";
     if (activeProvider === "openai-tts") return v.provider === "openai-tts";
     return false;
   });
+
+  const speakers =
+    session?.speakers?.length
+      ? session.speakers
+      : [
+          { speakerId: "speaker_male", displayName: "Male (manual)" },
+          { speakerId: "speaker_female", displayName: "Female (manual)" },
+        ];
 
   return (
     <aside className="editor-subtitles editor-dubbing">
@@ -221,14 +235,30 @@ export function DubbingPanel({
             </select>
           </label>
           <label>
+            Source spoken language
+            <select
+              value={sourceLanguage}
+              onChange={(e) => setSourceLanguage(e.target.value)}
+              disabled={busy}
+            >
+              <option value="auto">Auto / from subtitles</option>
+              <option value="en">English</option>
+              <option value="zh">Chinese</option>
+              <option value="ja">Japanese</option>
+              <option value="km">Khmer</option>
+            </select>
+          </label>
+          <label>
             Target language
             <select
               value={targetLanguage}
               onChange={(e) => setTargetLanguage(e.target.value)}
               disabled={busy}
             >
-              <option value="en">English</option>
-              <option value="km">Khmer (unsupported until verified)</option>
+              <option value="en">English (OpenAI TTS)</option>
+              <option value="km">
+                Khmer text (TTS not claimed — translate SRT first)
+              </option>
             </select>
           </label>
           <label>
@@ -329,15 +359,25 @@ export function DubbingPanel({
               disabled={busy || enabledVoices.length === 0}
               onClick={() =>
                 void run(async () => {
-                  const voice = enabledVoices[0]!;
+                  const male =
+                    enabledVoices.find((v) => v.genderLabel === "male") ??
+                    enabledVoices[0]!;
+                  const female =
+                    enabledVoices.find((v) => v.genderLabel === "female") ??
+                    enabledVoices[1] ??
+                    male;
                   await api.assignDubbingVoice(projectId, session.id, {
-                    speakerId: "speaker_1",
-                    voiceCharacterId: voice.id,
+                    speakerId: "speaker_male",
+                    voiceCharacterId: male.id,
+                  });
+                  await api.assignDubbingVoice(projectId, session.id, {
+                    speakerId: "speaker_female",
+                    voiceCharacterId: female.id,
                   });
                 })
               }
             >
-              Assign voice
+              Assign M/F voices
             </button>
             <button
               type="button"
@@ -421,31 +461,42 @@ export function DubbingPanel({
             />
           </label>
 
-          <label>
-            Voice for Speaker 1
-            <select
-              disabled={busy || enabledVoices.length === 0}
-              value={
-                session.voiceAssignments.find((a) => a.speakerId === "speaker_1")
-                  ?.voiceCharacterId ?? ""
-              }
-              onChange={(e) =>
-                void run(async () => {
-                  await api.assignDubbingVoice(projectId, session.id, {
-                    speakerId: "speaker_1",
-                    voiceCharacterId: e.target.value,
-                  });
-                })
-              }
-            >
-              <option value="">Select…</option>
-              {enabledVoices.map((v) => (
-                <option key={v.id} value={v.id}>
-                  {v.name} ({v.provider})
-                </option>
-              ))}
-            </select>
-          </label>
+          {speakers.map((sp) => (
+            <label key={sp.speakerId}>
+              Voice · {sp.displayName}
+              <select
+                disabled={busy || enabledVoices.length === 0}
+                value={
+                  session.voiceAssignments.find(
+                    (a) => a.speakerId === sp.speakerId,
+                  )?.voiceCharacterId ??
+                  sp.voiceCharacterId ??
+                  ""
+                }
+                onChange={(e) =>
+                  void run(async () => {
+                    await api.assignDubbingVoice(projectId, session.id, {
+                      speakerId: sp.speakerId,
+                      voiceCharacterId: e.target.value,
+                    });
+                  })
+                }
+              >
+                <option value="">Select…</option>
+                {enabledVoices.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.name}
+                    {v.genderLabel ? ` · ${v.genderLabel}` : ""} ({v.provider})
+                  </option>
+                ))}
+              </select>
+            </label>
+          ))}
+
+          <p className="studio-note">
+            Foley/SFX stay in background mix when separation is unavailable
+            (passthrough). True dialogue isolation is not claimed yet.
+          </p>
 
           {session.warnings.length > 0 ? (
             <ul className="editor-sub-warnings">
@@ -474,6 +525,27 @@ export function DubbingPanel({
                   {seg.status}
                   {seg.speakerId ? ` · ${seg.speakerId}` : ""}
                 </p>
+                <label>
+                  Speaker (male / female)
+                  <select
+                    value={seg.speakerId ?? "speaker_male"}
+                    disabled={busy}
+                    onChange={(e) => {
+                      const speakerId = e.target.value;
+                      void run(async () => {
+                        await api.updateDubbingSession(projectId, session.id, {
+                          segments: [{ id: seg.id, speakerId }],
+                        });
+                      });
+                    }}
+                  >
+                    {speakers.map((sp) => (
+                      <option key={sp.speakerId} value={sp.speakerId}>
+                        {sp.displayName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
                 <label>
                   Original
                   <textarea value={seg.sourceText} readOnly rows={2} />

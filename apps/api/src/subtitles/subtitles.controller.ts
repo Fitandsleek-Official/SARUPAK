@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -85,6 +86,13 @@ class BurnInDto {
   mediaAssetId!: string;
 }
 
+class TranslateDto {
+  @IsOptional()
+  @IsString()
+  @MaxLength(16)
+  targetLanguage?: string;
+}
+
 @UseGuards(JwtAuthGuard)
 @Controller("projects/:projectId/subtitles")
 export class SubtitlesController {
@@ -127,6 +135,22 @@ export class SubtitlesController {
     @Param("setId") setId: string,
   ) {
     return this.subtitles.get(user.userId, projectId, setId);
+  }
+
+  @Post(":setId/translate")
+  translate(
+    @CurrentUser() user: AuthUser,
+    @Param("projectId") projectId: string,
+    @Param("setId") setId: string,
+    @Body() body: TranslateDto,
+  ) {
+    const target = (body.targetLanguage ?? "km").toLowerCase();
+    if (target !== "km") {
+      throw new BadRequestException(
+        "Only targetLanguage=km is supported in Phase 7.",
+      );
+    }
+    return this.subtitles.translateToKhmer(user.userId, projectId, setId);
   }
 
   @Patch(":setId")

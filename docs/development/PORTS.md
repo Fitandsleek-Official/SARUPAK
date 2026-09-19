@@ -32,7 +32,7 @@ Confirm SARUPAK identity:
 
 ```bash
 curl -s http://127.0.0.1:4003/v1/health
-# Expect: {"status":"ok","service":"sarupak-api","version":"0.5.2",...}
+# Expect: {"status":"ok","service":"sarupak-api","version":"0.6.0",...}
 
 npm run smoke:api
 # or: node scripts/smoke-api.mjs http://localhost:4003/v1

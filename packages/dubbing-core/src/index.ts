@@ -194,7 +194,7 @@ export function segmentsFromSubtitles(
     translatedText: c.text,
     startMs: c.startMs,
     endMs: c.endMs,
-    speakerId: c.speakerId ?? "speaker_1",
+    speakerId: c.speakerId ?? "speaker_male",
     status: "pending" as const,
     warnings: [],
   }));

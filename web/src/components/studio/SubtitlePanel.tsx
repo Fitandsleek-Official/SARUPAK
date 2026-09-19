@@ -20,11 +20,12 @@ export function SubtitlePanel({
   const [sets, setSets] = useState<SubtitleSet[]>([]);
   const [active, setActive] = useState<SubtitleSet | null>(null);
   const [mediaId, setMediaId] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState("auto");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [providerInfo, setProviderInfo] = useState<string>("");
+  const [translateReady, setTranslateReady] = useState(false);
   const [burnJob, setBurnJob] = useState<Job | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
@@ -45,7 +46,15 @@ export function SubtitlePanel({
     void (async () => {
       try {
         const providers = await api.subtitleProviders(projectId);
-        setProviderInfo(`STT: ${providers.active}`);
+        const langs = (providers.supportedAsrLanguages ?? []).join("/");
+        setProviderInfo(
+          `STT: ${providers.active}` +
+            (langs ? ` · ASR langs ${langs}` : "") +
+            (providers.translate
+              ? ` · Translate: ${providers.translate.active}`
+              : ""),
+        );
+        setTranslateReady(Boolean(providers.translate?.openaiConfigured));
         await refresh();
         if (!mediaId && avMedia[0]) setMediaId(avMedia[0].id);
       } catch (err) {
@@ -72,6 +81,31 @@ export function SubtitlePanel({
       await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Generate failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onTranslateToKhmer() {
+    if (!active) {
+      setError("Generate or select a subtitle set first.");
+      return;
+    }
+    if (!translateReady) {
+      setError(
+        "Translate to Khmer requires OPENAI_API_KEY on the API. Configure the Railway/local API key.",
+      );
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await api.translateSubtitlesToKhmer(projectId, active.id);
+      setWarnings(result.warnings);
+      setActive(result.subtitleSet);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Translate failed");
     } finally {
       setBusy(false);
     }
@@ -209,17 +243,31 @@ export function SubtitlePanel({
       </label>
 
       <label>
-        Language
+        Spoken language (ASR)
         <select value={language} onChange={(e) => setLanguage(e.target.value)}>
+          <option value="auto">Auto-detect</option>
           <option value="en">English</option>
-          <option value="km">Khmer</option>
-          <option value="auto">Auto / unspecified</option>
+          <option value="zh">Chinese (中文)</option>
+          <option value="ja">Japanese (日本語)</option>
+          <option value="km">Khmer (ខ្មែរ)</option>
         </select>
       </label>
 
       <div className="editor-sub-actions">
         <button type="button" disabled={busy} onClick={() => void onGenerate()}>
           Generate
+        </button>
+        <button
+          type="button"
+          disabled={!active || busy}
+          title={
+            translateReady
+              ? "Create a new Khmer SRT set from this track"
+              : "Requires OPENAI_API_KEY on API"
+          }
+          onClick={() => void onTranslateToKhmer()}
+        >
+          Translate → KM
         </button>
         <button
           type="button"

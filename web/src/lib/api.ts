@@ -373,6 +373,13 @@ export const api = {
       whisperCli: boolean;
       silenceSegments: boolean;
       active: string;
+      supportedAsrLanguages?: string[];
+      translate?: {
+        active: string;
+        openaiConfigured: boolean;
+        targetLanguages: string[];
+        notes: string[];
+      };
     }>(`/projects/${projectId}/subtitles/providers`);
   },
   listSubtitles(projectId: string) {
@@ -390,6 +397,18 @@ export const api = {
     }>(`/projects/${projectId}/subtitles/generate`, {
       method: "POST",
       body: JSON.stringify(input),
+    });
+  },
+  translateSubtitlesToKhmer(projectId: string, setId: string) {
+    return apiFetch<{
+      subtitleSet: SubtitleSet;
+      sourceSetId: string;
+      provider: string;
+      warnings: string[];
+      jobId: string;
+    }>(`/projects/${projectId}/subtitles/${setId}/translate`, {
+      method: "POST",
+      body: JSON.stringify({ targetLanguage: "km" }),
     });
   },
   patchSubtitleSegment(

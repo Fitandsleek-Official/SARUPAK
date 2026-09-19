@@ -5,7 +5,7 @@ import { PrismaService } from "../prisma/prisma.service";
 
 /** Stable local defaults — see docs/development/PORTS.md */
 export const SARUPAK_SERVICE_ID = "sarupak-api" as const;
-export const SARUPAK_API_VERSION = "0.5.2" as const;
+export const SARUPAK_API_VERSION = "0.6.0" as const;
 export const SARUPAK_DEFAULT_PORT = 4003 as const;
 
 @Controller("health")
@@ -28,7 +28,7 @@ export class HealthController {
       /** Alias used by frontend identity checks */
       name: SARUPAK_SERVICE_ID,
       version: SARUPAK_API_VERSION,
-      phase: "5.2",
+      phase: "7",
       port,
       expectedDevPort: SARUPAK_DEFAULT_PORT,
       database,

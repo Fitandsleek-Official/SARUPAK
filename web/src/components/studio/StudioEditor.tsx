@@ -7,6 +7,7 @@ import {
   getApiBaseUrl,
   getStoredToken,
   setStoredToken,
+  verifyExpectedApi,
   type Job,
   type MediaAsset,
   type Project,
@@ -39,6 +40,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
   const [activeTool, setActiveTool] = useState<StudioToolId>("media");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+  const [apiOffline, setApiOffline] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -47,6 +49,27 @@ export function StudioEditor({ projectId }: { projectId: string }) {
     apply();
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        await verifyExpectedApi();
+        if (!cancelled) setApiOffline(null);
+      } catch (err) {
+        if (!cancelled) {
+          setApiOffline(
+            err instanceof Error
+              ? err.message
+              : "SARUPAK API offline or unreachable",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const timeline = useEditorStore((s) => s.timeline);
@@ -273,6 +296,12 @@ export function StudioEditor({ projectId }: { projectId: string }) {
         userEmail={userEmail}
         onSignOut={onSignOut}
       />
+
+      {apiOffline ? (
+        <p className="studio-error editor-banner" role="alert">
+          API offline: {apiOffline}
+        </p>
+      ) : null}
 
       {error ? (
         <p className="studio-error editor-banner" role="alert">

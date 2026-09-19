@@ -14,6 +14,7 @@ CapCut-inspired AI video editor (PWA) with creative tools. Built in phases.
 | 5 Real TTS | Done — explicit provider selection; OpenAI when keyed |
 | 5.2 Dev env | Done — stable ports API **4003** / web **3010** |
 | 6 Studio shell | Done — CapCut-style layout (PWA/Web only; no Tauri) |
+| 7 Captions + KM | Done — zh/ja/en/km ASR picker, translate-to-Khmer SRT, M/F dub slots |
 
 ## Quick start
 
@@ -41,4 +42,4 @@ Ports & stale-process safety: [`docs/development/PORTS.md`](docs/development/POR
 For local dubbing without cloud TTS, set `TTS_PROVIDER=mock` (tone placeholders — not speech).  
 For subtitle generation without cloud ASR, set `STT_PROVIDER=mock` or leave unset for silence-segment fallback.
 
-Details: [`docs/development/SETUP.md`](docs/development/SETUP.md) · Phase 5: [`docs/architecture/PHASE-5.md`](docs/architecture/PHASE-5.md) · Phase 6: [`docs/architecture/PHASE-6-STUDIO-SHELL.md`](docs/architecture/PHASE-6-STUDIO-SHELL.md)
+Details: [`docs/development/SETUP.md`](docs/development/SETUP.md) · Phase 5: [`docs/architecture/PHASE-5.md`](docs/architecture/PHASE-5.md) · Phase 6: [`docs/architecture/PHASE-6-STUDIO-SHELL.md`](docs/architecture/PHASE-6-STUDIO-SHELL.md) · Phase 7: [`docs/architecture/PHASE-7.md`](docs/architecture/PHASE-7.md)

@@ -209,7 +209,7 @@ describe("Phase 4 dubbing workflow (e2e)", () => {
       .post(`/v1/projects/${projectId}/dubbing/sessions/${sessionId}/assign-voice`)
       .set("Authorization", `Bearer ${token}`)
       .send({
-        speakerId: "speaker_1",
+        speakerId: "speaker_male",
         voiceCharacterId: mockVoice.id,
       });
     expect(assign.status).toBe(201);
@@ -248,7 +248,7 @@ describe("Phase 4 dubbing workflow (e2e)", () => {
       )
       .set("Authorization", `Bearer ${token}`)
       .send({
-        speakerId: "speaker_1",
+        speakerId: "speaker_male",
         voiceCharacterId: kmVoice.id,
       });
     expect(bad.status).toBe(400);

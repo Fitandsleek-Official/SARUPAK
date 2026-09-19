@@ -140,7 +140,8 @@ export class DubbingService {
 
     const segments = segmentsFromSubtitles(cues);
     const speakers: DubbingSpeaker[] = [
-      { speakerId: "speaker_1", displayName: "Speaker 1" },
+      { speakerId: "speaker_male", displayName: "Male (manual)" },
+      { speakerId: "speaker_female", displayName: "Female (manual)" },
     ];
     const row = await this.prisma.dubbingSession.create({
       data: {
@@ -379,7 +380,7 @@ export class DubbingService {
       );
       return {
         ...s,
-        speakerId: hit?.speakerId ?? s.speakerId ?? "speaker_1",
+        speakerId: hit?.speakerId ?? s.speakerId ?? "speaker_male",
       };
     });
 

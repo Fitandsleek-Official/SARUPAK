@@ -47,14 +47,18 @@ export class ManualDiarizationProvider implements DiarizationProvider {
       provider: this.name,
       available: true,
       isMock: false,
-      speakers: [{ speakerId: "speaker_1", displayName: "Speaker 1" }],
+      speakers: [
+        { speakerId: "speaker_male", displayName: "Male (manual)" },
+        { speakerId: "speaker_female", displayName: "Female (manual)" },
+      ],
       segments:
         input.cues?.map((c) => ({
           startMs: c.startMs,
           endMs: c.endMs,
-          speakerId: "speaker_1",
+          speakerId: "speaker_male",
         })) ?? [],
-      warning: "Manual mode — assign speakers in the UI. No auto diarization ran.",
+      warning:
+        "Manual male/female slots seeded — assign each cue in the UI. No auto gender detection.",
     };
   }
 }
