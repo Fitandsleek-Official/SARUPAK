@@ -11,29 +11,54 @@ Root Directory: **`/`** (repo root)
 | Healthcheck Path | `/v1/health` |
 | Watch Paths | `/apps/api/**`, `/packages/**`, `/package.json`, `/package-lock.json` |
 
-## Required variables
+`railway.toml` at the repo root sets build/start/healthcheck the same way.
 
-- `DATABASE_URL` — from Railway Postgres plugin (required or boot fails at Prisma `$connect`)
-- `JWT_SECRET` — long random string
-- `CORS_ORIGINS` — include `https://sarupak.vercel.app` (and preview URLs if needed)
-- Do **not** hardcode `PORT` unless you know Railway’s assigned port — prefer Railway’s injected `PORT`
-- `STORAGE_DRIVER=local`
-- `STORAGE_LOCAL_PATH=./storage`
-- `TTS_PROVIDER=mock` (until OpenAI key is set)
-- `STT_PROVIDER=mock`
+## Required variables (API service)
 
-## Healthcheck failing (“service unavailable”)
+| Variable | Value |
+|----------|--------|
+| `DATABASE_URL` | **Reference** the Postgres plugin — see below. Never paste the API public URL. |
+| `JWT_SECRET` | Long random string |
+| `CORS_ORIGINS` | `https://sarupak.vercel.app` (+ preview URLs if needed) |
+| `PORT` | **Leave unset** — Railway injects it |
+| `STORAGE_DRIVER` | `local` |
+| `STORAGE_LOCAL_PATH` | `./storage` |
+| `TTS_PROVIDER` | `mock` (until OpenAI key is set) |
+| `STT_PROVIDER` | `mock` |
 
-1. Open **Deploy Logs** (not only Build) — look for `Prisma` / `Can't reach database`
-2. Confirm Postgres plugin is linked and `DATABASE_URL` is set
-3. Pre-deploy / one-shot: `npm run prisma:deploy -w @sarupak/api`
-4. App listens on `0.0.0.0:$PORT` (required on Railway)
-5. Healthcheck path must be `/v1/health`
+### Correct `DATABASE_URL` (most common 502 cause)
 
-## After first deploy
+Wrong (points at the **API** service — Prisma P1001, process crash loop, edge 502):
+
+```text
+postgresql://…@sarupakapi.railway.internal:5432/…
+```
+
+Right — in the **API** service → Variables, add a **Variable Reference**:
+
+1. Add Postgres (or Railway PostgreSQL) to the **same project**
+2. On the API service, set:
+
+```text
+DATABASE_URL=${{Postgres.DATABASE_URL}}
+```
+
+Use your Postgres service name if it is not `Postgres` (Railway UI shows the exact reference). Private networking host should look like `postgres.railway.internal` or `*.rlwy.net` — **not** `sarupakapi.railway.internal`.
+
+## Healthcheck / “Application failed to respond”
+
+1. Open **Deploy Logs** (not Build) — look for:
+   - `SARUPAK API listening on 0.0.0.0:…`
+   - `DATABASE_URL host=…`
+   - `Postgres $connect failed` / P1001
+2. Fix `DATABASE_URL` as above, then **Redeploy**
+3. After a good boot: `curl https://<host>/v1/health` should return JSON with `"service":"sarupak-api"` and `"database":"up"`
+4. If `"database":"down"` the HTTP server is fine — only the DB URL/link is wrong
+
+## After first healthy deploy
 
 ```bash
-# one-time / release command (Railway pre-deploy):
+# Already attempted on every railway:start; re-run if needed:
 npm run prisma:deploy -w @sarupak/api
 ```
 

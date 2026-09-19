@@ -12,6 +12,11 @@ const DEFAULT_CORS = [
 ].join(",");
 
 async function bootstrap() {
+  // Prefer Railway-injected PORT over any stale local default.
+  const port = Number(
+    process.env.PORT ?? SARUPAK_DEFAULT_PORT,
+  );
+
   const app = await NestFactory.create(AppModule, { rawBody: false });
   const config = app.get(ConfigService);
 
@@ -34,7 +39,6 @@ async function bootstrap() {
     }),
   );
 
-  const port = Number(config.get("PORT") ?? SARUPAK_DEFAULT_PORT);
   // Railway / Docker: must bind all interfaces (not only localhost).
   await app.listen(port, "0.0.0.0");
   // eslint-disable-next-line no-console

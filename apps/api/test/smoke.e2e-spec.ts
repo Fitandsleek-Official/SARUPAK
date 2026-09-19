@@ -41,6 +41,7 @@ describe("SARUPAK API smoke (identity)", () => {
     expect(res.body.version).toBe(SARUPAK_API_VERSION);
     expect(res.body.expectedDevPort).toBe(SARUPAK_DEFAULT_PORT);
     expect(res.body.phase).toBeDefined();
+    expect(res.body.database).toMatch(/^(up|down)$/);
     // Must not look like the unrelated Norng Downloader API
     expect(JSON.stringify(res.body)).not.toMatch(/Norng/i);
   });
