@@ -32,9 +32,20 @@ Deploy Logs showing `listening on 0.0.0.0:8080` while the browser shows CORS / �
 4. Or delete the domain and **Generate Domain** again so Railway picks the correct port
 5. Verify: `curl https://sarupakapi-production.up.railway.app/v1/health` returns JSON (not 502)
 | `STORAGE_DRIVER` | `local` |
-| `STORAGE_LOCAL_PATH` | `./storage` |
+| `STORAGE_LOCAL_PATH` | **`/data/storage`** (must match the volume mount below) |
 | `TTS_PROVIDER` | `mock` (until OpenAI key is set) |
 | `STT_PROVIDER` | `mock` |
+
+### Persistent media (required — otherwise Studio 404s after redeploy)
+
+Railway’s container disk is **ephemeral**. Uploaded videos live only until the next deploy/restart unless you mount a **Volume**:
+
+1. API service → **Settings → Volumes** → **Add Volume**
+2. Mount path: `/data`
+3. Set variable: `STORAGE_LOCAL_PATH=/data/storage`
+4. Redeploy, then **re-import** any media (old DB rows still point at files that no longer exist)
+
+Without a volume, Studio will show *Media failed to load* / content `404` after each deploy even though the project timeline still lists clips.
 
 ### Correct `DATABASE_URL` (most common 502 cause)
 

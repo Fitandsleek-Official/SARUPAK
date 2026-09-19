@@ -13,10 +13,15 @@ function shortName(name: string): string {
   return `${name.slice(0, 28)}…${ext}`;
 }
 
+function isAvailable(asset: MediaAsset): boolean {
+  return asset.available !== false;
+}
+
 export function MediaLibraryPanel({
   projectId,
   media,
   onUpload,
+  onRemove,
   busy,
   kinds,
   title = "Media",
@@ -24,6 +29,7 @@ export function MediaLibraryPanel({
   projectId: string;
   media: MediaAsset[];
   onUpload: (file: File) => void;
+  onRemove?: (assetId: string) => void;
   busy: boolean;
   kinds?: MediaKind[];
   title?: string;
@@ -33,6 +39,7 @@ export function MediaLibraryPanel({
   const filtered = kinds
     ? media.filter((m) => kinds.includes(m.kind as MediaKind))
     : media;
+  const missing = filtered.filter((m) => !isAvailable(m));
 
   const accept = kinds
     ? kinds
@@ -52,6 +59,13 @@ export function MediaLibraryPanel({
       <p className="studio-library-hint">
         Import a file, then tap <strong>Add to timeline</strong>.
       </p>
+      {missing.length > 0 ? (
+        <p className="studio-library-missing" role="status">
+          {missing.length} file{missing.length === 1 ? "" : "s"} missing on the
+          server (common after Railway redeploy without a volume). Re-import, or
+          remove the broken entries.
+        </p>
+      ) : null}
       <label className={`editor-upload ${busy ? "is-busy" : ""}`}>
         <input
           type="file"
@@ -76,44 +90,66 @@ export function MediaLibraryPanel({
         </div>
       ) : (
         <ul className="editor-media-list">
-          {filtered.map((m) => (
-            <li key={m.id} className="editor-media-card">
-              <MediaThumb projectId={projectId} asset={m} />
-              <div className="editor-media-meta">
-                <strong title={m.originalName}>{shortName(m.originalName)}</strong>
-                <span>
-                  {m.durationMs != null
-                    ? `${(m.durationMs / 1000).toFixed(1)}s`
-                    : "—"}
-                  {m.width && m.height ? ` · ${m.width}×${m.height}` : ""}
-                </span>
-              </div>
-              <button
-                type="button"
-                className="editor-media-add"
-                onClick={() => {
-                  const durationMs =
-                    m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000);
-                  addMediaClip({
-                    mediaAssetId: m.id,
-                    kind: m.kind as MediaKind,
-                    label: m.originalName,
-                    durationMs,
-                  });
-                  const tl = useEditorStore.getState().timeline;
-                  const track = tl?.tracks.find(
-                    (t) =>
-                      (m.kind === "AUDIO" && t.kind === "audio") ||
-                      (m.kind !== "AUDIO" && t.kind === "video"),
-                  );
-                  const last = track?.clips[track.clips.length - 1];
-                  if (last) scrub(last.startMs);
-                }}
+          {filtered.map((m) => {
+            const ok = isAvailable(m);
+            return (
+              <li
+                key={m.id}
+                className={`editor-media-card ${ok ? "" : "is-missing"}`}
               >
-                Add to timeline
-              </button>
-            </li>
-          ))}
+                <MediaThumb projectId={projectId} asset={m} />
+                <div className="editor-media-meta">
+                  <strong title={m.originalName}>
+                    {shortName(m.originalName)}
+                  </strong>
+                  <span>
+                    {ok
+                      ? `${
+                          m.durationMs != null
+                            ? `${(m.durationMs / 1000).toFixed(1)}s`
+                            : "—"
+                        }${m.width && m.height ? ` · ${m.width}×${m.height}` : ""}`
+                      : "File missing on server"}
+                  </span>
+                </div>
+                {ok ? (
+                  <button
+                    type="button"
+                    className="editor-media-add"
+                    onClick={() => {
+                      const durationMs =
+                        m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000);
+                      addMediaClip({
+                        mediaAssetId: m.id,
+                        kind: m.kind as MediaKind,
+                        label: m.originalName,
+                        durationMs,
+                      });
+                      const tl = useEditorStore.getState().timeline;
+                      const track = tl?.tracks.find(
+                        (t) =>
+                          (m.kind === "AUDIO" && t.kind === "audio") ||
+                          (m.kind !== "AUDIO" && t.kind === "video"),
+                      );
+                      const last = track?.clips[track.clips.length - 1];
+                      if (last) scrub(last.startMs);
+                    }}
+                  >
+                    Add to timeline
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="editor-media-remove"
+                    disabled={busy || !onRemove}
+                    onClick={() => onRemove?.(m.id)}
+                  >
+                    Remove missing
+                  </button>
+                )}
+              </li>
+            );
+          })}
         </ul>
       )}
     </aside>
@@ -128,9 +164,9 @@ function MediaThumb({
   asset: MediaAsset;
 }) {
   const url = mediaContentUrl(projectId, asset.id);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState(!isAvailable(asset));
 
-  if (failed) {
+  if (failed || !isAvailable(asset)) {
     return (
       <div className="editor-media-kind" data-kind={asset.kind}>
         {asset.kind === "AUDIO" ? "AUD" : asset.kind === "IMAGE" ? "IMG" : "VID"}

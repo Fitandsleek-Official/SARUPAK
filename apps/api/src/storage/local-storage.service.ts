@@ -12,7 +12,19 @@ export class LocalStorageService implements StorageService {
   constructor(config: ConfigService) {
     const configured =
       config.get<string>("STORAGE_LOCAL_PATH") ?? "./storage";
-    this.root = path.resolve(process.cwd(), configured);
+    this.root = path.isAbsolute(configured)
+      ? configured
+      : path.resolve(process.cwd(), configured);
+    void fs.mkdir(this.root, { recursive: true }).then(
+      () => {
+        this.logger.log(`Local storage root: ${this.root}`);
+      },
+      (err: unknown) => {
+        this.logger.error(
+          `Failed to create storage root ${this.root}: ${String(err)}`,
+        );
+      },
+    );
   }
 
   private resolveSafe(key: string): string {

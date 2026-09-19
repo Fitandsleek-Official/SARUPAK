@@ -152,7 +152,8 @@ export function PreviewPlayer({
         ) : null}
         {videoSrc && mediaStatus === "error" ? (
           <div className="editor-preview-status is-error" role="alert">
-            Media failed to load — re-import if the file was lost on the server.
+            Media file missing on the server. Re-import after attaching a Railway
+            volume (see docs), or remove the broken clip from the timeline.
           </div>
         ) : null}
       </div>

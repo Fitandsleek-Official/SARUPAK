@@ -214,6 +214,8 @@ export interface MediaAsset {
   width: number | null;
   height: number | null;
   createdAt: string;
+  /** False when DB row exists but bytes were lost (e.g. Railway redeploy without a volume). */
+  available?: boolean;
 }
 
 export interface Job {
@@ -367,6 +369,12 @@ export const api = {
       method: "POST",
       body: form,
     });
+  },
+  deleteMedia(projectId: string, assetId: string) {
+    return apiFetch<{ ok: boolean }>(
+      `/projects/${projectId}/media/${assetId}`,
+      { method: "DELETE" },
+    );
   },
   startExport(projectId: string, aspect: "16:9" | "9:16" | "1:1" = "16:9") {
     return apiFetch<Job>(`/projects/${projectId}/export`, {

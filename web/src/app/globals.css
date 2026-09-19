@@ -2202,6 +2202,17 @@ a {
   line-height: 1.4;
 }
 
+.studio-library-missing {
+  margin: 0 0 0.75rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #6a3a2a;
+  background: #2a1812;
+  color: #f0c8b8;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+
 .studio-library-empty {
   margin-top: 1rem;
   padding: 1.25rem 1rem;
@@ -2264,6 +2275,11 @@ a {
   border-radius: 10px;
 }
 
+.editor-media-card.is-missing {
+  border-color: #6a3a2a;
+  opacity: 0.92;
+}
+
 .editor-media-thumb {
   grid-row: span 2;
   width: 72px;
@@ -2323,6 +2339,16 @@ a {
   background: #2a241e !important;
   color: #e8a045 !important;
   border: 1px solid #5a4632 !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  padding: 0.5rem 0.65rem !important;
+}
+
+.editor-media-remove {
+  grid-column: 1 / -1;
+  background: #2a1812 !important;
+  color: #f0c8b8 !important;
+  border: 1px solid #6a3a2a !important;
   border-radius: 8px !important;
   font-weight: 700 !important;
   padding: 0.5rem 0.65rem !important;

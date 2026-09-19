@@ -214,6 +214,20 @@ export function StudioEditor({ projectId }: { projectId: string }) {
     }
   }
 
+  async function onRemoveMedia(assetId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.deleteMedia(projectId, assetId);
+      const assets = await api.listMedia(projectId);
+      setMedia(assets);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove media");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function onExport() {
     if (!timeline) return;
     setError(null);
@@ -300,6 +314,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
   }
 
   const exportDisabled = media.length === 0 && timeline.tracks.every((t) => t.clips.length === 0);
+  const missingMediaCount = media.filter((m) => m.available === false).length;
 
   return (
     <div className="studio-shell-app">
@@ -327,6 +342,17 @@ export function StudioEditor({ projectId }: { projectId: string }) {
       {apiOffline ? (
         <p className="studio-error editor-banner" role="alert">
           API offline: {apiOffline}
+        </p>
+      ) : null}
+
+      {missingMediaCount > 0 ? (
+        <p className="studio-error editor-banner" role="alert">
+          {missingMediaCount} media file
+          {missingMediaCount === 1 ? "" : "s"} missing on the API server.
+          Open Media, remove broken entries, re-import, and attach a Railway
+          Volume at <code>/data</code> with{" "}
+          <code>STORAGE_LOCAL_PATH=/data/storage</code> so files survive
+          redeploys.
         </p>
       ) : null}
 
@@ -379,6 +405,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
                 projectId={projectId}
                 media={media}
                 onUpload={onUpload}
+                onRemove={(id) => void onRemoveMedia(id)}
                 busy={busy}
                 title="Media"
               />
@@ -388,6 +415,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
                 projectId={projectId}
                 media={media}
                 onUpload={onUpload}
+                onRemove={(id) => void onRemoveMedia(id)}
                 busy={busy}
                 kinds={["AUDIO"]}
                 title="Audio"

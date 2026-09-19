@@ -37,7 +37,14 @@ export class MediaService {
       where: { projectId, userId },
       orderBy: { createdAt: "desc" },
     });
-    return assets.map((a) => this.toDto(a));
+    return Promise.all(
+      assets.map(async (a) => {
+        const available = this.storage.exists
+          ? await this.storage.exists(a.storageKey)
+          : true;
+        return { ...this.toDto(a), available };
+      }),
+    );
   }
 
   async upload(
@@ -126,7 +133,7 @@ export class MediaService {
       },
     });
 
-    return this.toDto(asset);
+    return { ...this.toDto(asset), available: true };
   }
 
   async remove(userId: string, projectId: string, assetId: string) {
