@@ -53,10 +53,16 @@ export function clipSourceDurationMs(clip: TimelineClip): number {
 
 /** Visible media time at a timeline playhead for a clip. */
 export function mediaTimeAtPlayhead(clip: TimelineClip, playheadMs: number): number | null {
-  if (playheadMs < clip.startMs || playheadMs >= clip.startMs + clip.durationMs) {
+  const end = clip.startMs + clip.durationMs;
+  if (playheadMs < clip.startMs || playheadMs > end) {
     return null;
   }
-  return clip.trimInMs + (playheadMs - clip.startMs);
+  // Inclusive end so the last frame still previews when playhead sits on the out point.
+  const offset = Math.min(
+    Math.max(0, playheadMs - clip.startMs),
+    Math.max(0, clip.durationMs - 1),
+  );
+  return clip.trimInMs + offset;
 }
 
 export function activeClipsAt(
@@ -69,10 +75,8 @@ export function activeClipsAt(
     if (kinds && !kinds.includes(track.kind)) continue;
     if (track.muted) continue;
     for (const clip of track.clips) {
-      if (
-        playheadMs >= clip.startMs &&
-        playheadMs < clip.startMs + clip.durationMs
-      ) {
+      const end = clip.startMs + clip.durationMs;
+      if (playheadMs >= clip.startMs && playheadMs <= end) {
         out.push({ track, clip });
       }
     }

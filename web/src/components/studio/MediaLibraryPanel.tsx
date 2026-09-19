@@ -1,17 +1,27 @@
 "use client";
 
+import { useState } from "react";
 import type { MediaAsset } from "@/lib/api";
+import { mediaContentUrl } from "@/lib/api";
 import { useEditorStore } from "@/lib/editorStore";
 
 type MediaKind = "VIDEO" | "AUDIO" | "IMAGE";
 
+function shortName(name: string): string {
+  if (name.length <= 42) return name;
+  const ext = name.includes(".") ? name.slice(name.lastIndexOf(".")) : "";
+  return `${name.slice(0, 28)}…${ext}`;
+}
+
 export function MediaLibraryPanel({
+  projectId,
   media,
   onUpload,
   busy,
   kinds,
   title = "Media",
 }: {
+  projectId: string;
   media: MediaAsset[];
   onUpload: (file: File) => void;
   busy: boolean;
@@ -19,6 +29,7 @@ export function MediaLibraryPanel({
   title?: string;
 }) {
   const addMediaClip = useEditorStore((s) => s.addMediaClip);
+  const scrub = useEditorStore((s) => s.scrub);
   const filtered = kinds
     ? media.filter((m) => kinds.includes(m.kind as MediaKind))
     : media;
@@ -67,11 +78,9 @@ export function MediaLibraryPanel({
         <ul className="editor-media-list">
           {filtered.map((m) => (
             <li key={m.id} className="editor-media-card">
-              <div className="editor-media-kind" data-kind={m.kind}>
-                {m.kind === "AUDIO" ? "AUD" : m.kind === "IMAGE" ? "IMG" : "VID"}
-              </div>
+              <MediaThumb projectId={projectId} asset={m} />
               <div className="editor-media-meta">
-                <strong title={m.originalName}>{m.originalName}</strong>
+                <strong title={m.originalName}>{shortName(m.originalName)}</strong>
                 <span>
                   {m.durationMs != null
                     ? `${(m.durationMs / 1000).toFixed(1)}s`
@@ -82,15 +91,24 @@ export function MediaLibraryPanel({
               <button
                 type="button"
                 className="editor-media-add"
-                onClick={() =>
+                onClick={() => {
+                  const durationMs =
+                    m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000);
                   addMediaClip({
                     mediaAssetId: m.id,
                     kind: m.kind as MediaKind,
                     label: m.originalName,
-                    durationMs:
-                      m.durationMs ?? (m.kind === "IMAGE" ? 3000 : 5000),
-                  })
-                }
+                    durationMs,
+                  });
+                  const tl = useEditorStore.getState().timeline;
+                  const track = tl?.tracks.find(
+                    (t) =>
+                      (m.kind === "AUDIO" && t.kind === "audio") ||
+                      (m.kind !== "AUDIO" && t.kind === "video"),
+                  );
+                  const last = track?.clips[track.clips.length - 1];
+                  if (last) scrub(last.startMs);
+                }}
               >
                 Add to timeline
               </button>
@@ -99,5 +117,55 @@ export function MediaLibraryPanel({
         </ul>
       )}
     </aside>
+  );
+}
+
+function MediaThumb({
+  projectId,
+  asset,
+}: {
+  projectId: string;
+  asset: MediaAsset;
+}) {
+  const url = mediaContentUrl(projectId, asset.id);
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <div className="editor-media-kind" data-kind={asset.kind}>
+        {asset.kind === "AUDIO" ? "AUD" : asset.kind === "IMAGE" ? "IMG" : "VID"}
+      </div>
+    );
+  }
+
+  if (asset.kind === "IMAGE") {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        className="editor-media-thumb"
+        src={url}
+        alt=""
+        onError={() => setFailed(true)}
+      />
+    );
+  }
+
+  if (asset.kind === "AUDIO") {
+    return (
+      <div className="editor-media-kind" data-kind="AUDIO" title={asset.originalName}>
+        ♪
+      </div>
+    );
+  }
+
+  return (
+    <video
+      className="editor-media-thumb"
+      src={url}
+      muted
+      playsInline
+      preload="metadata"
+      onError={() => setFailed(true)}
+    />
   );
 }

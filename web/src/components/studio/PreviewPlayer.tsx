@@ -2,17 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import type { MediaAsset } from "@/lib/api";
-import { getApiBaseUrl, getStoredToken } from "@/lib/api";
+import { mediaContentUrl } from "@/lib/api";
 import {
   activeClipsAt,
   mediaTimeAtPlayhead,
 } from "@sarupak/editor-core";
 import { useEditorStore } from "@/lib/editorStore";
-
-function mediaUrl(projectId: string, assetId: string) {
-  const token = getStoredToken();
-  return `${getApiBaseUrl()}/projects/${projectId}/media/${assetId}/content?token=${encodeURIComponent(token ?? "")}`;
-}
 
 export function PreviewPlayer({
   projectId,
@@ -34,9 +29,9 @@ export function PreviewPlayer({
   const audioRef = useRef<HTMLAudioElement>(null);
   const raf = useRef<number | null>(null);
   const [fitMode, setFitMode] = useState<"contain" | "cover">("contain");
-  const [mediaStatus, setMediaStatus] = useState<"idle" | "loading" | "ready" | "error">(
-    "idle",
-  );
+  const [mediaStatus, setMediaStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
 
   const active = timeline
     ? activeClipsAt(timeline, timeline.playheadMs, ["video", "audio"])
@@ -47,11 +42,11 @@ export function PreviewPlayer({
 
   useEffect(() => {
     if (!videoClip?.mediaAssetId) {
-      setMediaStatus(hasAnyMedia ? "idle" : "idle");
+      setMediaStatus("idle");
       return;
     }
     setMediaStatus("loading");
-  }, [videoClip?.mediaAssetId, hasAnyMedia]);
+  }, [videoClip?.mediaAssetId]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -87,9 +82,11 @@ export function PreviewPlayer({
         const state = useEditorStore.getState();
         if (!state.timeline || !state.isPlaying) return;
         const next = state.timeline.playheadMs + 33;
-        if (next >= state.durationMs()) {
+        const end = state.durationMs();
+        if (next >= end) {
           state.setPlaying(false);
-          state.scrub(state.durationMs());
+          // Stay on last visible frame (inclusive end).
+          state.scrub(Math.max(0, end));
           return;
         }
         state.scrub(next);
@@ -107,6 +104,12 @@ export function PreviewPlayer({
   }, [isPlaying]);
 
   const aspect = width / Math.max(1, height);
+  const videoSrc = videoClip?.mediaAssetId
+    ? mediaContentUrl(projectId, videoClip.mediaAssetId)
+    : null;
+  const audioSrc = audioClip?.mediaAssetId
+    ? mediaContentUrl(projectId, audioClip.mediaAssetId)
+    : null;
 
   return (
     <div className="editor-preview">
@@ -115,11 +118,11 @@ export function PreviewPlayer({
         style={{ aspectRatio: `${aspect}` }}
         data-fit={fitMode}
       >
-        {videoClip?.mediaAssetId ? (
+        {videoSrc ? (
           <video
-            key={videoClip.mediaAssetId}
+            key={videoClip!.mediaAssetId}
             ref={videoRef}
-            src={mediaUrl(projectId, videoClip.mediaAssetId)}
+            src={videoSrc}
             playsInline
             muted={false}
             style={{ objectFit: fitMode }}
@@ -131,25 +134,25 @@ export function PreviewPlayer({
           <div className="editor-preview-empty">
             {!hasAnyMedia
               ? "Import media and add it to the timeline to preview."
-              : "No video at playhead"}
+              : "No video at playhead — click the clip or drag the playhead onto it."}
           </div>
         )}
-        {audioClip?.mediaAssetId ? (
+        {audioSrc ? (
           <audio
-            key={audioClip.mediaAssetId}
+            key={audioClip!.mediaAssetId}
             ref={audioRef}
-            src={mediaUrl(projectId, audioClip.mediaAssetId)}
+            src={audioSrc}
             preload="auto"
           />
         ) : null}
-        {videoClip?.mediaAssetId && mediaStatus === "loading" ? (
+        {videoSrc && mediaStatus === "loading" ? (
           <div className="editor-preview-status" role="status">
             Loading…
           </div>
         ) : null}
-        {videoClip?.mediaAssetId && mediaStatus === "error" ? (
+        {videoSrc && mediaStatus === "error" ? (
           <div className="editor-preview-status is-error" role="alert">
-            Media failed to load
+            Media failed to load — re-import if the file was lost on the server.
           </div>
         ) : null}
       </div>

@@ -108,6 +108,12 @@ export function getStoredToken(): string | null {
   return window.localStorage.getItem(TOKEN_KEY);
 }
 
+/** Authenticated media stream URL for <video>/<audio>/waveform (query token). */
+export function mediaContentUrl(projectId: string, assetId: string): string {
+  const token = getStoredToken();
+  return `${getApiBaseUrl()}/projects/${projectId}/media/${assetId}/content?token=${encodeURIComponent(token ?? "")}`;
+}
+
 export function setStoredToken(token: string | null) {
   if (typeof window === "undefined") return;
   if (!token) {

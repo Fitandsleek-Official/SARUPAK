@@ -3,6 +3,7 @@
 import { useRef } from "react";
 import type { TrackKind } from "@sarupak/shared-types";
 import { useEditorStore } from "@/lib/editorStore";
+import { ClipWaveform } from "./ClipWaveform";
 
 const TRACK_ORDER: TrackKind[] = [
   "video",
@@ -12,7 +13,7 @@ const TRACK_ORDER: TrackKind[] = [
   "effects",
 ];
 
-export function TimelinePanel() {
+export function TimelinePanel({ projectId }: { projectId: string }) {
   const timeline = useEditorStore((s) => s.timeline);
   const selectedClipId = useEditorStore((s) => s.selectedClipId);
   const pixelsPerSecond = useEditorStore((s) => s.pixelsPerSecond);
@@ -94,7 +95,9 @@ export function TimelinePanel() {
               e.clientX -
               rect.left +
               (scrollParent ? scrollParent.scrollLeft : 0);
-            scrub(Math.max(0, (x / pixelsPerSecond) * 1000));
+            const ms = Math.max(0, (x / pixelsPerSecond) * 1000);
+            const max = Math.max(0, durationMs());
+            scrub(max > 0 ? Math.min(ms, max) : ms);
           }}
         >
           {Array.from({ length: Math.ceil(totalMs / 1000) + 1 }).map((_, i) => (
@@ -129,6 +132,10 @@ export function TimelinePanel() {
                     : track.kind === "captions" || track.kind === "text"
                       ? "text"
                       : "fx";
+                const showWave =
+                  Boolean(clip.mediaAssetId) &&
+                  (track.kind === "audio" || track.kind === "video") &&
+                  w >= 40;
                 return (
                   <div
                     key={clip.id}
@@ -179,6 +186,14 @@ export function TimelinePanel() {
                       window.addEventListener("mouseup", onUp);
                     }}
                   >
+                    {showWave && clip.mediaAssetId ? (
+                      <ClipWaveform
+                        projectId={projectId}
+                        mediaAssetId={clip.mediaAssetId}
+                        width={w}
+                        height={36}
+                      />
+                    ) : null}
                     <span
                       className="editor-clip-handle in"
                       data-handle="in"

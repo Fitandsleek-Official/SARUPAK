@@ -3,7 +3,6 @@ import {
   Inject,
   Injectable,
   NotFoundException,
-  StreamableFile,
 } from "@nestjs/common";
 import { MediaKind } from "@prisma/client";
 import {
@@ -11,7 +10,6 @@ import {
   validateUpload,
 } from "@sarupak/media-utils";
 import { ConfigService } from "@nestjs/config";
-import { createReadStream } from "node:fs";
 import { createId } from "./create-id";
 import { PrismaService } from "../prisma/prisma.service";
 import { ProjectsService } from "../projects/projects.service";
@@ -104,7 +102,7 @@ export class MediaService {
         userId,
         kind: validation.kind as MediaKind,
         storageKey,
-        originalName: validation.safeBaseName,
+        originalName: validation.displayName,
         mimeType: file.mimetype.toLowerCase().split(";")[0]!.trim(),
         sizeBytes: BigInt(file.size),
         durationMs,
@@ -152,17 +150,21 @@ export class MediaService {
     if (!asset) {
       throw new NotFoundException("Media asset not found.");
     }
-    if (!this.storage.resolvePath) {
+    if (!this.storage.resolvePath || !this.storage.exists) {
       throw new BadRequestException("Cannot stream from this storage driver.");
     }
+    const exists = await this.storage.exists(asset.storageKey);
+    if (!exists) {
+      throw new NotFoundException(
+        "Media file is missing on the server (storage may have been reset). Re-import the file.",
+      );
+    }
     const filePath = this.storage.resolvePath(asset.storageKey);
-    const stream = createReadStream(filePath);
     return {
-      file: new StreamableFile(stream, {
-        type: asset.mimeType,
-        disposition: `inline; filename="${asset.originalName}"`,
-      }),
+      filePath,
       mimeType: asset.mimeType,
+      /** ASCII-safe name for Content-Disposition */
+      downloadName: asset.originalName.replace(/[^\w.\-()+\s]/g, "_").slice(0, 120) || "media.bin",
     };
   }
 

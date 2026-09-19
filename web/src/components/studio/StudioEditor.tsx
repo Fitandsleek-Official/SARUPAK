@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import {
   api,
   getApiBaseUrl,
@@ -40,8 +40,34 @@ export function StudioEditor({ projectId }: { projectId: string }) {
   const [activeTool, setActiveTool] = useState<StudioToolId>("media");
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [toolPanelOpen, setToolPanelOpen] = useState(true);
+  const [toolPanelWidth, setToolPanelWidth] = useState(300);
+  const [inspectorWidth, setInspectorWidth] = useState(280);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [apiOffline, setApiOffline] = useState<string | null>(null);
+
+  function startResize(
+    edge: "tool" | "inspector",
+    ev: MouseEvent,
+  ) {
+    ev.preventDefault();
+    const startX = ev.clientX;
+    const startTool = toolPanelWidth;
+    const startInsp = inspectorWidth;
+    const onMove = (e: MouseEvent) => {
+      const dx = e.clientX - startX;
+      if (edge === "tool") {
+        setToolPanelWidth(Math.min(480, Math.max(220, startTool + dx)));
+      } else {
+        setInspectorWidth(Math.min(420, Math.max(200, startInsp - dx)));
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -334,6 +360,12 @@ export function StudioEditor({ projectId }: { projectId: string }) {
 
         <div
           className={`studio-shell-workspace ${toolPanelOpen ? "" : "is-tool-collapsed"} ${inspectorOpen ? "" : "is-inspector-collapsed"}`}
+          style={
+            {
+              ["--studio-tool-w" as string]: `${toolPanelWidth}px`,
+              ["--studio-inspector-w" as string]: `${inspectorWidth}px`,
+            } as CSSProperties
+          }
         >
           {toolPanelOpen ? (
           <div
@@ -344,6 +376,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
           >
             {activeTool === "media" ? (
               <MediaLibraryPanel
+                projectId={projectId}
                 media={media}
                 onUpload={onUpload}
                 busy={busy}
@@ -352,6 +385,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
             ) : null}
             {activeTool === "audio" ? (
               <MediaLibraryPanel
+                projectId={projectId}
                 media={media}
                 onUpload={onUpload}
                 busy={busy}
@@ -379,6 +413,16 @@ export function StudioEditor({ projectId }: { projectId: string }) {
               <DubbingPanel projectId={projectId} media={media} />
             ) : null}
           </div>
+          ) : null}
+
+          {toolPanelOpen ? (
+            <div
+              className="studio-resize-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize tool panel"
+              onMouseDown={(e) => startResize("tool", e)}
+            />
           ) : null}
 
           <div className="studio-shell-canvas">
@@ -412,6 +456,16 @@ export function StudioEditor({ projectId }: { projectId: string }) {
             />
           </div>
 
+          {inspectorOpen ? (
+            <div
+              className="studio-resize-handle"
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize inspector"
+              onMouseDown={(e) => startResize("inspector", e)}
+            />
+          ) : null}
+
           <StudioInspector
             open={inspectorOpen}
             onClose={() => setInspectorOpen(false)}
@@ -425,7 +479,7 @@ export function StudioEditor({ projectId }: { projectId: string }) {
         orientation="horizontal"
       />
 
-      <TimelinePanel />
+      <TimelinePanel projectId={projectId} />
     </div>
   );
 }

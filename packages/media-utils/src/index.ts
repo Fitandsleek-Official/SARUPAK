@@ -27,7 +27,10 @@ export type UploadMediaKind = keyof typeof ALLOWED_MIME_TYPES;
 export interface MediaValidationResult {
   ok: true;
   kind: UploadMediaKind;
+  /** ASCII-safe name for storage keys / Content-Disposition fallback. */
   safeBaseName: string;
+  /** Original basename for UI (Unicode preserved). */
+  displayName: string;
 }
 
 export interface MediaValidationError {
@@ -45,11 +48,24 @@ export function inferKindFromMime(mimeType: string): UploadMediaKind | null {
   return null;
 }
 
-/** Strip path segments and unsafe characters from user-provided filenames. */
+/** Strip path segments and unsafe characters for storage filenames (ASCII-safe). */
 export function sanitizeFileName(originalName: string): string {
   const base = path.basename(originalName).replace(/[^\w.\-()+\s]/g, "_");
   const trimmed = base.trim().slice(0, 180);
   return trimmed.length > 0 ? trimmed : "upload.bin";
+}
+
+/**
+ * Human-facing filename for UI — keeps Unicode (Khmer, CJK, …).
+ * Only strips path segments and control characters.
+ */
+export function displayFileName(originalName: string): string {
+  const base = path
+    .basename(originalName)
+    .replace(/[\0\r\n\t]/g, "")
+    .trim()
+    .slice(0, 180);
+  return base.length > 0 ? base : "upload.bin";
 }
 
 export function validateUpload(input: {
@@ -79,6 +95,7 @@ export function validateUpload(input: {
     ok: true,
     kind,
     safeBaseName: sanitizeFileName(input.originalName),
+    displayName: displayFileName(input.originalName),
   };
 }
 

@@ -16,6 +16,13 @@ describe("sanitizeFileName", () => {
   });
 });
 
+describe("displayFileName", () => {
+  it("keeps Unicode display names", async () => {
+    const { displayFileName } = await import("./index");
+    assert.equal(displayFileName("វីដេអូ.mp4"), "វីដេអូ.mp4");
+  });
+});
+
 describe("validateUpload", () => {
   it("accepts mp4 video", () => {
     const result = validateUpload({
