@@ -73,9 +73,8 @@ export class SotakaTtsProvider implements TTSProvider {
   constructor(
     private readonly config: ConfigService,
     private readonly ffmpeg: FfmpegService,
-    fetchImpl?: FetchLike,
   ) {
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.fetchImpl = fetch;
   }
 
   setFetch(fetchImpl: FetchLike) {

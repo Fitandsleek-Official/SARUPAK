@@ -22,11 +22,8 @@ export class SotakaSeparationProvider implements AudioSeparationProvider {
   private readonly logger = new Logger(SotakaSeparationProvider.name);
   private fetchImpl: FetchLike;
 
-  constructor(
-    private readonly config: ConfigService,
-    fetchImpl?: FetchLike,
-  ) {
-    this.fetchImpl = fetchImpl ?? fetch;
+  constructor(private readonly config: ConfigService) {
+    this.fetchImpl = fetch;
   }
 
   setFetch(fetchImpl: FetchLike) {

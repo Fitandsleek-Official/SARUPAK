@@ -11,14 +11,16 @@ describe("OpenAiTranslateProvider", () => {
         return undefined;
       },
     } as unknown as ConfigService;
-    return new OpenAiTranslateProvider(config, fetchImpl);
+    const provider = new OpenAiTranslateProvider(config);
+    provider.setFetch(fetchImpl);
+    return provider;
   }
 
   it("rejects when API key missing", async () => {
     const config = {
       get: () => undefined,
     } as unknown as ConfigService;
-    const provider = new OpenAiTranslateProvider(config, fetch);
+    const provider = new OpenAiTranslateProvider(config);
     await expect(
       provider.translateToKhmer([{ id: "1", text: "Hello" }], "en"),
     ).rejects.toThrow(/translate_not_configured/i);

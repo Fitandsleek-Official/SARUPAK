@@ -33,9 +33,8 @@ export class OpenAiTtsProvider implements TTSProvider {
   constructor(
     private readonly config: ConfigService,
     private readonly ffmpeg: FfmpegService,
-    fetchImpl?: FetchLike,
   ) {
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.fetchImpl = fetch;
   }
 
   /** Test-only: swap fetch implementation. */

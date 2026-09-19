@@ -33,11 +33,8 @@ export class OpenAiTranslateProvider {
   private readonly logger = new Logger(OpenAiTranslateProvider.name);
   private fetchImpl: FetchLike;
 
-  constructor(
-    private readonly config: ConfigService,
-    fetchImpl?: FetchLike,
-  ) {
-    this.fetchImpl = fetchImpl ?? fetch;
+  constructor(private readonly config: ConfigService) {
+    this.fetchImpl = fetch;
   }
 
   setFetch(fetchImpl: FetchLike) {

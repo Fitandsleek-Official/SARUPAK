@@ -88,7 +88,8 @@ describe("OpenAI TTS provider (mocked HTTP)", () => {
     });
     const seedBuf = await fs.readFile(seed);
 
-    const provider = new OpenAiTtsProvider(config, ffmpeg, async () => {
+    const provider = new OpenAiTtsProvider(config, ffmpeg);
+    provider.setFetch(async () => {
       return new Response(seedBuf, { status: 200 });
     });
 
@@ -109,7 +110,8 @@ describe("OpenAI TTS provider (mocked HTTP)", () => {
   });
 
   it("maps HTTP failures to provider_error without falling back", async () => {
-    const provider = new OpenAiTtsProvider(config, ffmpeg, async () => {
+    const provider = new OpenAiTtsProvider(config, ffmpeg);
+    provider.setFetch(async () => {
       return new Response("nope", { status: 500 });
     });
     await expect(
