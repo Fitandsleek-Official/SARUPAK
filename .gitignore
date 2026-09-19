@@ -26,10 +26,10 @@ apps/api/.env
 apps/api/.env.*
 !apps/api/.env.example
 
-# Local media storage
-storage/
-apps/api/storage/
-web/storage/
+# Local media storage (data dirs only — do NOT ignore apps/api/src/storage/)
+/storage/
+/apps/api/storage/
+/web/storage/
 
 # OS / IDE
 .DS_Store
