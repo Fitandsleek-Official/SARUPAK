@@ -26,8 +26,39 @@ export interface ApiHealthInfo {
 /**
  * Confirms the configured base URL speaks SARUPAK — not Norng or a stale build.
  */
+export function isLocalhostApiUrl(url: string = API_URL): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1";
+  } catch {
+    return false;
+  }
+}
+
+export function isBrowserOnDeployedHost(): boolean {
+  if (typeof window === "undefined") return false;
+  const host = window.location.hostname;
+  return host !== "localhost" && host !== "127.0.0.1";
+}
+
 export async function verifyExpectedApi(): Promise<ApiHealthInfo> {
-  const res = await fetch(`${API_URL}/health`, { cache: "no-store" });
+  let res: Response;
+  try {
+    res = await fetch(`${API_URL}/health`, { cache: "no-store" });
+  } catch {
+    if (isBrowserOnDeployedHost() && isLocalhostApiUrl()) {
+      throw new ApiError(
+        0,
+        `Studio API is not available on this hosted site. NEXT_PUBLIC_API_URL points at ${API_URL} (your machine). Creative tools on this site still work; for Studio, run the Nest API locally (npm run dev:api) and open http://127.0.0.1:3010/studio, or set NEXT_PUBLIC_API_URL to a deployed sarupak-api and redeploy.`,
+        null,
+      );
+    }
+    throw new ApiError(
+      0,
+      `Cannot reach SARUPAK API at ${API_URL}. Start it with: npm run dev:api (port ${EXPECTED_API_DEV_PORT}).`,
+      null,
+    );
+  }
   const body = (await res.json().catch(() => null)) as ApiHealthInfo | null;
   if (!res.ok || !body) {
     throw new ApiError(

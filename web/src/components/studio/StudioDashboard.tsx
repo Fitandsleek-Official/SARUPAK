@@ -141,8 +141,8 @@ export function StudioDashboard() {
           <p className="studio-kicker">AI Video Studio · Phase 5.2</p>
           <h1>SARUPAK Studio</h1>
           <p className="studio-lead">
-            Projects, auth, media, timeline, subtitles, and dubbing. API must be
-            sarupak-api on the configured base URL.
+            Projects, auth, media, timeline, subtitles, and dubbing. Requires a
+            running <code>sarupak-api</code> (local :4003 or a deployed API URL).
           </p>
           <p className="studio-lead" style={{ marginTop: "0.35rem", fontSize: "0.85rem" }}>
             API: <code>{getApiBaseUrl()}</code>
