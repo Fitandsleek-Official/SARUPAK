@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
+/** Monorepo package sources (repo is cloned fully; Vercel Root Directory = web). */
 const packageAliases = {
   "@sarupak/editor-core": path.resolve(
     __dirname,
@@ -10,7 +11,6 @@ const packageAliases = {
     __dirname,
     "../packages/shared-types/src/index.ts",
   ),
-  zustand: path.resolve(__dirname, "../node_modules/zustand"),
 };
 
 const nextConfig: NextConfig = {
@@ -22,11 +22,11 @@ const nextConfig: NextConfig = {
     "@ffmpeg/util",
   ],
   // Next.js 16 defaults to Turbopack; keep aliases for both bundlers.
+  // Do NOT alias zustand to ../node_modules — on Vercel that path is empty.
   turbopack: {
     resolveAlias: {
       "@sarupak/editor-core": "../packages/editor-core/src/index.ts",
       "@sarupak/shared-types": "../packages/shared-types/src/index.ts",
-      zustand: "../node_modules/zustand",
     },
   },
   webpack: (config) => {
