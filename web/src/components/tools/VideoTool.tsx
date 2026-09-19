@@ -28,7 +28,7 @@ export function VideoTool() {
         <h1>{tab === "convert" ? "Video Converter" : "AI Video Generator"}</h1>
         <p>
           {tab === "convert"
-            ? "Upload វីដេអូ — compress · High quality post TikTok 120Hz / Facebook · FPS 24–240 · HD / 2K / 4K / 8K."
+            ? "Upload វីដេអូ — Esports 120/144 Smooth · TikTok 120Hz · Facebook · FPS 24–240 · HD / 2K / 4K / 8K."
             : "Image or prompt → short video clip — pipeline for a future Hugging Face worker."}
         </p>
       </header>

@@ -5,7 +5,7 @@ import { VideoTool } from "@/components/tools/VideoTool";
 export const metadata: Metadata = {
   title: "Video Converter — SARUPAK",
   description:
-    "Upload, compress, and export High quality video for TikTok 120Hz, Facebook, and other apps.",
+    "Esports 120/144 FPS smooth convert, TikTok 120Hz, Facebook — HD to 8K in the browser.",
 };
 
 export default function VideoPage() {

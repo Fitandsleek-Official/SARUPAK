@@ -1,78 +1,43 @@
-# SARUPAK — AI Creative Studio
+# SARUPAK — AI Video Studio
 
-Multi-tool AI media platform (owned stack · browser + Hugging Face ready).
+CapCut-inspired AI video editor (PWA) with creative tools. Built in phases.
 
-## Features
+## Current status
 
-| Tool | Route | Status |
-|------|-------|--------|
-| AI Image Editor | `/editor` | Live — person vs landscape regional edit |
-| Background Remover | `/remove-bg` | Live |
-| Photo Collage Maker | `/collage` | Live |
-| AI Image Generator | `/generate` | Beta UI |
-| Video Converter | `/video` | Live — TikTok 120Hz / Facebook post quality, compress, 24–240 FPS, HD–8K |
-| AI Face Swap | `/face-swap` | Beta UI |
+| Phase | Status |
+|-------|--------|
+| 0 Architecture | Done |
+| 1 Foundation | Done — auth, projects, media, PWA |
+| 2 Basic editor | Done — timeline, preview, trim/split, export |
+| 3 Subtitles | Done — STT adapters, edit, SRT/VTT, burn-in |
+| 4 AI Dubbing | Done — extract, adapters, mock/OpenAI TTS, mix, export |
+| 5 Real TTS | Done — explicit provider selection; OpenAI when keyed |
+| 5.2 Dev env | Done — stable ports API **4003** / web **3010** |
 
-## Local develop
+## Quick start
 
 ```bash
-cd web
+cp apps/api/.env.example apps/api/.env
+cp web/.env.example web/.env.local
 npm install
-npm run dev
+npm run build -w @sarupak/shared-types && npm run build -w @sarupak/media-utils && npm run build -w @sarupak/editor-core && npm run build -w @sarupak/subtitle-utils && npm run build -w @sarupak/dubbing-core
+cd apps/api && npx prisma migrate dev && cd ../..
+
+# Terminal A
+npm run dev:api    # http://localhost:4003/v1
+
+# Terminal B
+npm run dev:web    # http://localhost:3010
+
+# Identity check
+npm run smoke:api
 ```
 
-Open http://localhost:3000
+Studio: http://localhost:3010/studio  
 
-## Host on Vercel (recommended)
+Ports & stale-process safety: [`docs/development/PORTS.md`](docs/development/PORTS.md)
 
-1. Push this repo to GitHub
-2. [vercel.com/new](https://vercel.com/new) → Import repo
-3. **Root Directory:** `web`
-4. Framework: Next.js (auto)
-5. Deploy
+For local dubbing without cloud TTS, set `TTS_PROVIDER=mock` (tone placeholders — not speech).  
+For subtitle generation without cloud ASR, set `STT_PROVIDER=mock` or leave unset for silence-segment fallback.
 
-Or CLI:
-
-```bash
-cd web
-npx vercel
-```
-
-Production build check:
-
-```bash
-cd web
-npm run build
-npm start
-```
-
-## Worker on Hugging Face Spaces
-
-1. https://huggingface.co/new-space → name `sarupak-worker` → SDK **Docker**
-2. Upload files from `worker/` (`Dockerfile`, `app.py`, `requirements.txt`, `README.md`)
-3. Wait for build → copy Space URL
-4. Vercel → SARUPAK project → Environment Variable:
-
-```
-NEXT_PUBLIC_WORKER_URL=https://YOUR_USER-sarupak-worker.hf.space
-```
-
-5. Redeploy web
-
-Health check: `https://YOUR_USER-sarupak-worker.hf.space/health`
-
-## Structure
-
-```
-SARUPAK/
-  web/       Next.js  ← Vercel https://sarupak.vercel.app
-  worker/    FastAPI  ← Hugging Face Space (Docker)
-  README.md
-```
-
-## Notes
-
-- First Background Remover / person segment run downloads ONNX model in the browser (~40MB)
-- First Video Converter run downloads FFmpeg WASM in the browser (~31MB)
-- Optional: `web/.env` from `web/.env.example` for future worker URL
-- Worker is not required for current live features
+Details: [`docs/development/SETUP.md`](docs/development/SETUP.md) · Phase 5: [`docs/architecture/PHASE-5.md`](docs/architecture/PHASE-5.md)

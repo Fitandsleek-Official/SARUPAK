@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3010",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3010",
     "lint": "eslint",
     "postinstall": "node -e \"const fs=require('fs');const p=require('path');const s=p.join('node_modules','@ffmpeg','ffmpeg','dist','esm');const d=p.join('public','ffmpeg');if(!fs.existsSync(s))process.exit(0);fs.mkdirSync(d,{recursive:true});for (const f of ['worker.js','const.js','errors.js']) fs.copyFileSync(p.join(s,f),p.join(d,f));\""
   },
@@ -13,10 +13,13 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@imgly/background-removal": "^1.7.0",
+    "@sarupak/editor-core": "file:../packages/editor-core",
+    "@sarupak/shared-types": "file:../packages/shared-types",
     "next": "16.3.0",
     "onnxruntime-web": "^1.21.0-dev.20250206-d981b153d3",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

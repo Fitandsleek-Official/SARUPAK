@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Figtree, Syne } from "next/font/google";
+import { PwaRegister } from "@/components/site/PwaRegister";
 import "./globals.css";
 
 const syne = Syne({
@@ -15,9 +16,29 @@ const figtree = Figtree({
 });
 
 export const metadata: Metadata = {
-  title: "SARUPAK — AI Creative Studio",
+  title: "SARUPAK — AI Video Studio",
   description:
-    "AI Image Editor, Background Remover, Collage, Video Converter (24–240 FPS, HD/2K/4K/8K), Generator & Face Swap.",
+    "AI Video Studio with creative tools: image editor, background remover, collage, video converter, and more.",
+  applicationName: "SARUPAK",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "SARUPAK",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" }],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#0c0b0a",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -26,7 +47,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="km"
       className={`${syne.variable} ${figtree.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <PwaRegister />
+      </body>
     </html>
   );
 }

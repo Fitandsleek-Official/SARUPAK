@@ -40,11 +40,11 @@ export function SiteNav() {
             </Link>
           ))}
           <Link
-            href="/editor"
+            href="/studio"
             className="nav-cta"
             onClick={() => setOpen(false)}
           >
-            ចាប់ផ្តើម
+            Studio
           </Link>
         </nav>
       </div>

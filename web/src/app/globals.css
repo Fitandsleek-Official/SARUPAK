@@ -1486,3 +1486,608 @@ a {
     width: auto;
   }
 }
+
+/* —— Studio (Phase 1) —— */
+.studio-shell {
+  width: min(920px, calc(100% - 2rem));
+  margin: 2rem auto 4rem;
+  color: #f3efe6;
+}
+
+.studio-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1.5rem;
+  align-items: flex-start;
+  margin-bottom: 1.5rem;
+}
+
+.studio-kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.72rem;
+  color: #c4a06a;
+  margin: 0 0 0.35rem;
+}
+
+.studio-shell h1 {
+  font-family: var(--font-display), sans-serif;
+  font-size: clamp(1.8rem, 4vw, 2.6rem);
+  margin: 0 0 0.4rem;
+}
+
+.studio-shell h2 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.15rem;
+  margin: 0 0 0.75rem;
+}
+
+.studio-lead {
+  margin: 0;
+  color: #b9b0a3;
+  max-width: 42rem;
+  line-height: 1.5;
+}
+
+.studio-panel {
+  background: linear-gradient(160deg, #1a1714, #12100e);
+  border: 1px solid #2f2a24;
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem;
+  margin-bottom: 1rem;
+}
+
+.studio-form,
+.studio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: end;
+}
+
+.studio-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1 1 180px;
+  font-size: 0.85rem;
+  color: #cfc6b8;
+}
+
+.studio-form input,
+.studio-row input {
+  background: #0c0b0a;
+  border: 1px solid #3a332c;
+  color: #f3efe6;
+  border-radius: 8px;
+  padding: 0.55rem 0.7rem;
+  min-width: 0;
+  width: 100%;
+}
+
+.studio-form button,
+.studio-row button,
+.studio-user button,
+.studio-list button,
+.studio-tabs button {
+  background: #e8a045;
+  color: #1a1208;
+  border: none;
+  border-radius: 8px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.studio-list button {
+  background: transparent;
+  color: #e8a045;
+  border: 1px solid #5a4632;
+}
+
+.studio-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.studio-tabs button {
+  background: #2a241e;
+  color: #d9d0c3;
+}
+
+.studio-tabs button.is-active {
+  background: #e8a045;
+  color: #1a1208;
+}
+
+.studio-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.studio-list li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: center;
+  padding: 0.65rem 0;
+  border-top: 1px solid #2a241e;
+}
+
+.studio-list li:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.studio-list a {
+  color: #f3efe6;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.studio-list span {
+  display: block;
+  color: #9e9486;
+  font-size: 0.8rem;
+  margin-top: 0.2rem;
+}
+
+.studio-error {
+  background: #3a1c1c;
+  border: 1px solid #7a3a3a;
+  color: #ffd0d0;
+  padding: 0.75rem 1rem;
+  border-radius: 10px;
+}
+
+.studio-note {
+  color: #c4a06a;
+  font-size: 0.9rem;
+}
+
+.studio-empty {
+  color: #9e9486;
+  margin: 0.5rem 0 0;
+}
+
+.studio-json {
+  overflow: auto;
+  max-height: 280px;
+  background: #0c0b0a;
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  color: #cfc6b8;
+}
+
+.studio-back {
+  color: #c4a06a;
+  text-decoration: none;
+  font-size: 0.9rem;
+}
+
+.studio-user {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* —— Phase 2 Editor —— */
+.editor-app {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px);
+  background: #0c0b0a;
+  color: #f3efe6;
+}
+
+.editor-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  align-items: center;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #2a241e;
+  background: #141210;
+}
+
+.editor-toolbar-left {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.editor-toolbar h1 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.editor-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.editor-toolbar-actions button,
+.editor-toolbar-actions select,
+.editor-library button,
+.editor-upload,
+.editor-transport button,
+.editor-track-meta button,
+.editor-banner button {
+  background: #2a241e;
+  color: #f3efe6;
+  border: 1px solid #3a332c;
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.editor-export {
+  background: #e8a045 !important;
+  color: #1a1208 !important;
+  border-color: #e8a045 !important;
+  font-weight: 700;
+}
+
+.editor-save {
+  color: #c4a06a;
+  font-size: 0.85rem;
+}
+
+.editor-banner {
+  margin: 0.5rem 1rem;
+}
+
+.editor-body {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: 0;
+  min-height: 420px;
+  flex: 1;
+}
+
+.editor-library {
+  border-right: 1px solid #2a241e;
+  padding: 1rem;
+  overflow: auto;
+  background: #12100e;
+}
+
+.editor-library h2,
+.editor-inspector h2 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.editor-upload {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+  background: #e8a045 !important;
+  color: #1a1208 !important;
+  border-color: #e8a045 !important;
+  font-weight: 600;
+}
+
+.editor-upload input {
+  display: none;
+}
+
+.editor-media-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.editor-media-list li {
+  display: grid;
+  gap: 0.4rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid #2a241e;
+}
+
+.editor-media-list span {
+  display: block;
+  color: #9e9486;
+  font-size: 0.78rem;
+}
+
+.editor-center {
+  display: grid;
+  grid-template-columns: 1fr 200px minmax(260px, 320px);
+  min-width: 0;
+}
+
+.editor-preview {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  background:
+    radial-gradient(ellipse at top, #1a1714, #0c0b0a 70%);
+}
+
+.editor-preview-stage {
+  width: min(100%, 720px);
+  background: #000;
+  border: 1px solid #2a241e;
+  border-radius: 10px;
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.editor-preview-stage video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+.editor-preview-empty {
+  color: #7a7166;
+  padding: 3rem 1rem;
+  text-align: center;
+}
+
+.editor-transport {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.editor-timecode {
+  font-variant-numeric: tabular-nums;
+  color: #cfc6b8;
+  font-size: 0.9rem;
+}
+
+.editor-inspector {
+  border-left: 1px solid #2a241e;
+  padding: 1rem;
+  background: #12100e;
+}
+
+.editor-inspector label {
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.85rem;
+  color: #cfc6b8;
+  margin: 0.75rem 0;
+}
+
+.editor-timeline {
+  border-top: 1px solid #2a241e;
+  background: #10100e;
+  padding: 0.5rem 0 1rem;
+  overflow-x: auto;
+  max-height: 280px;
+}
+
+.editor-timeline-ruler {
+  position: relative;
+  height: 28px;
+  margin: 0 0 0.35rem 140px;
+  border-bottom: 1px solid #2a241e;
+}
+
+.editor-timeline-ruler span {
+  position: absolute;
+  top: 4px;
+  font-size: 0.7rem;
+  color: #8a8074;
+  transform: translateX(-50%);
+}
+
+.editor-track {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  min-height: 56px;
+  align-items: stretch;
+}
+
+.editor-track-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.4rem 0.6rem;
+  border-right: 1px solid #2a241e;
+  font-size: 0.8rem;
+}
+
+.editor-track-lane {
+  position: relative;
+  height: 56px;
+  background: repeating-linear-gradient(
+    90deg,
+    #161411,
+    #161411 79px,
+    #1b1814 80px
+  );
+}
+
+.editor-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #e8a045;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.editor-clip {
+  position: absolute;
+  top: 8px;
+  height: 40px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  overflow: hidden;
+  cursor: grab;
+  user-select: none;
+  border: 1px solid transparent;
+}
+
+.editor-clip.video {
+  background: linear-gradient(90deg, #3a5a4a, #2a4036);
+}
+
+.editor-clip.audio {
+  background: linear-gradient(90deg, #3a4a6a, #2a3450);
+}
+
+.editor-clip.is-selected {
+  border-color: #e8a045;
+  box-shadow: 0 0 0 1px #e8a045;
+}
+
+.editor-clip-label {
+  flex: 1;
+  padding: 0 0.4rem;
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.editor-clip-handle {
+  width: 8px;
+  align-self: stretch;
+  background: rgba(255, 255, 255, 0.2);
+  cursor: ew-resize;
+}
+
+@media (max-width: 960px) {
+  .editor-body,
+  .editor-center {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-inspector,
+  .editor-library,
+  .editor-subtitles {
+    border: none;
+    border-bottom: 1px solid #2a241e;
+  }
+}
+
+.editor-subtitles {
+  border-left: 1px solid #2a241e;
+  padding: 1rem;
+  background: #12100e;
+  overflow: auto;
+  max-height: calc(100vh - 220px);
+}
+
+.editor-subtitles h2 {
+  font-family: var(--font-display), sans-serif;
+  font-size: 1rem;
+  margin: 0 0 0.75rem;
+}
+
+.editor-subtitles label {
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.82rem;
+  color: #cfc6b8;
+  margin-bottom: 0.65rem;
+}
+
+.editor-subtitles select,
+.editor-subtitles textarea,
+.editor-cue-timing input {
+  background: #0c0b0a;
+  border: 1px solid #3a332c;
+  color: #f3efe6;
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  width: 100%;
+}
+
+.editor-sub-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.75rem;
+}
+
+.editor-sub-actions button {
+  background: #2a241e;
+  color: #f3efe6;
+  border: 1px solid #3a332c;
+  border-radius: 8px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.editor-sub-warnings {
+  margin: 0 0 0.75rem;
+  padding-left: 1.1rem;
+  color: #c4a06a;
+  font-size: 0.78rem;
+}
+
+.editor-cue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.65rem;
+}
+
+.editor-cue-list li {
+  border: 1px solid #2a241e;
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+.editor-cue-list li.is-selected {
+  border-color: #e8a045;
+}
+
+.editor-cue-meta {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  font-size: 0.75rem;
+  color: #9e9486;
+  margin-bottom: 0.35rem;
+}
+
+.editor-cue-meta button {
+  margin-left: auto;
+  background: transparent;
+  border: 1px solid #3a332c;
+  color: #e8a045;
+  border-radius: 6px;
+  padding: 0.15rem 0.4rem;
+  cursor: pointer;
+}
+
+.editor-cue-timing {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.editor-dubbing { border-top: 1px solid #2a241e; }
+.editor-dubbing audio { width: 100%; margin-top: 0.35rem; }

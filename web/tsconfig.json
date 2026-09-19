@@ -19,7 +19,9 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@sarupak/editor-core": ["../packages/editor-core/src/index.ts"],
+      "@sarupak/shared-types": ["../packages/shared-types/src/index.ts"]
     }
   },
   "include": [

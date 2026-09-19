@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String         @id @default(cuid())
+  email        String         @unique
+  passwordHash String
+  displayName  String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  projects     Project[]
+  voices       VoiceProfile[]
+  mediaAssets  MediaAsset[]
+  jobs         Job[]
+}
+
+model Project {
+  id            String            @id @default(cuid())
+  userId        String
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  schemaVersion Int               @default(1)
+  width         Int               @default(1920)
+  height        Int               @default(1080)
+  frameRate     Float             @default(30)
+  durationMs    Int               @default(0)
+  timeline      Json
+  status        ProjectStatus     @default(DRAFT)
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+  mediaAssets      MediaAsset[]
+  subtitleSets     SubtitleSet[]
+  characters       Character[]
+  jobs             Job[]
+  snapshots        ProjectSnapshot[]
+  dubbingSessions  DubbingSession[]
+
+  @@index([userId, updatedAt])
+}
+
+model DubbingSession {
+  id                    String   @id @default(cuid())
+  projectId             String
+  project               Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  mediaAssetId          String
+  subtitleSetId         String?
+  schemaVersion         Int      @default(1)
+  sourceLanguage        String   @default("en")
+  targetLanguage        String   @default("en")
+  status                String   @default("draft")
+  mixMode               String   @default("mix")
+  ttsProvider           String?
+  dialogueVolume        Float    @default(1)
+  backgroundVolume      Float    @default(0.6)
+  speakers              Json
+  voiceAssignments      Json
+  segments              Json
+  tracks                Json
+  separation            Json?
+  mix                   Json?
+  extractedAudioMediaId String?
+  mixedVideoMediaId     String?
+  warnings              Json
+  errorMessage          String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([projectId, updatedAt])
+}
+
+model ProjectSnapshot {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  label     String?
+  timeline  Json
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+}
+
+enum ProjectStatus {
+  DRAFT
+  PROCESSING
+  READY
+  FAILED
+}
+
+model MediaAsset {
+  id           String    @id @default(cuid())
+  projectId    String
+  project      Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind         MediaKind
+  storageKey   String
+  originalName String
+  mimeType     String
+  sizeBytes    BigInt
+  durationMs   Int?
+  width        Int?
+  height       Int?
+  checksum     String?
+  createdAt    DateTime  @default(now())
+
+  @@index([projectId])
+  @@index([userId])
+}
+
+enum MediaKind {
+  VIDEO
+  AUDIO
+  IMAGE
+  STEM
+  GENERATED_SPEECH
+}
+
+model SubtitleSet {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  language  String
+  segments  Json
+  style     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Character {
+  id             String        @id @default(cuid())
+  projectId      String
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name           String
+  voiceProfileId String?
+  voiceProfile   VoiceProfile? @relation(fields: [voiceProfileId], references: [id])
+  meta           Json?
+}
+
+model VoiceProfile {
+  id              String      @id @default(cuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String
+  providerVoiceId String
+  language        String
+  status          VoiceStatus @default(PENDING)
+  consentRecord   Json?
+  characters      Character[]
+  createdAt       DateTime    @default(now())
+}
+
+enum VoiceStatus {
+  PENDING
+  READY
+  DISABLED
+  REVOKED
+}
+
+model Job {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      JobType
+  status    JobStatus @default(QUEUED)
+  progress  Float     @default(0)
+  input     Json?
+  output    Json?
+  error     String?
+  attempts  Int       @default(0)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId, status])
+  @@index([projectId, createdAt])
+}
+
+enum JobType {
+  PROBE
+  TRANSCODE
+  EXTRACT_AUDIO
+  STT
+  SEPARATE_AUDIO
+  DIARIZE
+  TTS
+  MIX
+  RENDER
+  AUTO_CUT_ANALYZE
+}
+
+enum JobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}

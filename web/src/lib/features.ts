@@ -1,4 +1,5 @@
 export type FeatureId =
+  | "studio"
   | "editor"
   | "remove-bg"
   | "collage"
@@ -18,13 +19,22 @@ export interface Feature {
 
 export const FEATURES: Feature[] = [
   {
+    id: "studio",
+    href: "/studio",
+    title: "AI Video Studio",
+    titleKm: "Studio វីដេអូ",
+    blurb: "Timeline · preview · trim/split · export MP4",
+    status: "live",
+    accent: "#e8a045",
+  },
+  {
     id: "editor",
     href: "/editor",
     title: "AI Image Editor",
     titleKm: "កែរូប AI",
     blurb: "បែងចែក skin · nature · ផ្កា · background រួចកែលម្អិត",
     status: "live",
-    accent: "#e8a045",
+    accent: "#d4a574",
   },
   {
     id: "remove-bg",
